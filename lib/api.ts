@@ -155,6 +155,7 @@ export interface KpiOpts {
   status?: string
   orderType?: string
   referenceAt?: string
+  hasLinkedBudget?: string
   extensionUuid?: string
   extensionNumber?: string
   chatId?: string
@@ -165,6 +166,7 @@ function kpiParams(opts: KpiOpts) {
   if (opts.sellerId) p.sellerId = opts.sellerId
   if (opts.status) p.status = opts.status
   if (opts.orderType) p.orderType = opts.orderType
+  if (opts.hasLinkedBudget) p.hasLinkedBudget = opts.hasLinkedBudget
   if (opts.extensionUuid) p.extensionUuid = opts.extensionUuid
   if (opts.extensionNumber) p.extensionNumber = opts.extensionNumber
   if (opts.chatId) p.chatId = opts.chatId
@@ -192,6 +194,8 @@ export interface BudgetDrilldownRow {
   budgetDate: string
   budgetDatetime: string
   closingDate: string | null
+  cancellationDate: string | null
+  cancelationTime: string | null
   branchId: number
   branchName: string
   sellerId: number
@@ -233,6 +237,104 @@ export function getBudgetFollowUp(opts: KpiOpts & { referenceAt: string }) {
   )
 }
 
+// ── Follow-up Daily ──
+
+export interface FollowUpDailyRow {
+  date: string
+  window: string
+  status: string
+  count: number
+  value: string
+}
+
+export interface FollowUpDaily {
+  period: KpiPeriod
+  rows: FollowUpDailyRow[]
+}
+
+export function getBudgetFollowUpDaily(opts: KpiOpts & { referenceAt: string }) {
+  const p = kpiParams(opts)
+  p.set("referenceAt", opts.referenceAt)
+  return api<FollowUpDaily>(`/kpis/budgets/follow-up/daily?${p}`, {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
+
+/** Returns a DailySeries-compatible shape filtered by window + status */
+export async function getFollowUpDailySeries(
+  opts: KpiOpts & { referenceAt: string },
+  window: string,
+  fStatus: string,
+): Promise<DailySeries> {
+  const data = await getBudgetFollowUpDaily(opts)
+  return {
+    period: data.period,
+    series: data.rows
+      .filter((r) => r.window === window && r.status === fStatus)
+      .map((r) => ({ date: r.date, count: r.count, value: r.value })),
+  }
+}
+
+// ── Follow-up Drilldown ──
+
+export interface FollowUpDrilldownRow {
+  id: string
+  sourceTable: string
+  sourceRecordId: number
+  budgetDate: string
+  budgetDatetime: string
+  closingDate: string | null
+  cancellationDate: string | null
+  cancelationTime: string | null
+  branchId: number
+  branchName: string
+  sellerId: number
+  sellerName: string
+  statusNormalized: string
+  channel: string | null
+  customerName: string
+  cpfCnpj: string | null
+  valueAmount: string
+  sequential: string | null
+  davId: string | null
+  sequentialLinkedSale: string | null
+  followUpWindow: string
+  followUpStatus: string
+}
+
+export interface FollowUpDrilldown {
+  period: KpiPeriod
+  filters: {
+    referenceAt?: string
+    date?: string
+    followUpWindow?: string
+    followUpStatus?: string
+    sellerId?: number
+    orderType?: string
+  }
+  rows: FollowUpDrilldownRow[]
+}
+
+export function getBudgetFollowUpDrilldown(
+  opts: KpiOpts & {
+    referenceAt: string
+    date?: string
+    followUpWindow?: string
+    followUpStatus?: string
+  },
+) {
+  const p = kpiParams(opts)
+  p.set("referenceAt", opts.referenceAt)
+  if (opts.date) p.set("date", opts.date)
+  if (opts.followUpWindow) p.set("followUpWindow", opts.followUpWindow)
+  if (opts.followUpStatus) p.set("followUpStatus", opts.followUpStatus)
+  return api<FollowUpDrilldown>(`/kpis/budgets/follow-up/drilldown?${p}`, {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
+
 export function getSalesSummary(opts: KpiOpts) {
   return api<SalesSummary>(`/kpis/sales/summary?${kpiParams(opts)}`, {
     token: opts.token,
@@ -260,6 +362,46 @@ export interface TicketAverage {
 
 export function getSalesTicketAverage(opts: KpiOpts) {
   return api<TicketAverage>(`/kpis/sales/ticket-average?${kpiParams(opts)}`, {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
+
+export interface SalesDrilldownRow {
+  id: string
+  sourceTable: string
+  sourceRecordId: number
+  saleDate: string
+  saleDatetime: string
+  branchId: number
+  branchName: string
+  sellerId: number
+  sellerName: string
+  statusNormalized: string
+  channel: string | null
+  hasLinkedBudget: boolean
+  linkedBudgetSourceRecordId: number | null
+  customerName: string
+  cpfCnpj: string | null
+  valueAmount: string
+  sequential: string | null
+  invoiceSerie: string | null
+  invoiceNumeric: string | null
+  listDavsId: string | null
+}
+
+export interface SalesDrilldown {
+  period: KpiPeriod
+  filters: {
+    sellerId?: number
+    status?: string
+    orderType?: string
+  }
+  rows: SalesDrilldownRow[]
+}
+
+export function getSalesDrilldown(opts: KpiOpts) {
+  return api<SalesDrilldown>(`/kpis/sales/drilldown?${kpiParams(opts)}`, {
     token: opts.token,
     tenantId: opts.tenantId,
   })

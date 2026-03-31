@@ -471,17 +471,10 @@ export function CallsSection({
 
     setLoading(true)
     Promise.all([
-      getCallsSummary(opts),
-      getCallsHourly(opts),
-      getCallsAgentsRanking(opts),
-    ])
-      .then(([s, h, r]) => {
-        setSummary(s)
-        setHourly(h)
-        setRanking(r)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      getCallsSummary(opts).then(setSummary).catch((e) => console.error("[KPI] calls summary", e)),
+      getCallsHourly(opts).then(setHourly).catch((e) => console.error("[KPI] calls hourly", e)),
+      getCallsAgentsRanking(opts).then(setRanking).catch((e) => console.error("[KPI] calls ranking", e)),
+    ]).finally(() => setLoading(false))
   }, [session, from, to, refreshKey, extensionUuid, extensionNumber])
 
   function openDrilldown(kind: CallsDrilldownKind) {

@@ -18,6 +18,7 @@ import {
   LayoutDashboardIcon,
   FileSpreadsheetIcon,
   ShoppingCartIcon,
+  ClockIcon,
   Settings2Icon,
   CircleHelpIcon,
   BrainCircuitIcon,
@@ -36,8 +37,13 @@ const navMain = [
     icon: <FileSpreadsheetIcon />,
   },
   {
+    title: "Follow-up",
+    url: "/dashboard/followup",
+    icon: <ClockIcon />,
+  },
+  {
     title: "Vendas",
-    url: "/dashboard#vendas",
+    url: "/dashboard/vendas",
     icon: <ShoppingCartIcon />,
   },
 ]

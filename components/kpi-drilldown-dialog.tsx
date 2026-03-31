@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { DailySeries, KpiOpts } from "@/lib/api"
-import { getBudgetDaily, getSalesDaily } from "@/lib/api"
+import { getBudgetDaily, getSalesDaily, getFollowUpDailySeries } from "@/lib/api"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -44,14 +44,24 @@ export type DrilldownKind =
   | "budgets-open"
   | "budgets-lost"
   | "sales-total"
-  | "sales-active"
+  | "sales-active-with-budget"
+  | "sales-active-without-budget"
   | "sales-canceled"
+  | "followup-within24h-converted"
+  | "followup-within24h-lost"
+  | "followup-within24h-open"
+  | "followup-after24h-converted"
+  | "followup-after24h-lost"
+  | "followup-after24h-open"
 
 interface DrilldownConfig {
   title: string
   description: string
   fetcher: (opts: KpiOpts) => Promise<DailySeries>
   status?: string
+  hasLinkedBudget?: string
+  followUpWindow?: string
+  followUpStatus?: string
 }
 
 const DRILLDOWN_CONFIG: Record<DrilldownKind, DrilldownConfig> = {
@@ -83,17 +93,67 @@ const DRILLDOWN_CONFIG: Record<DrilldownKind, DrilldownConfig> = {
     description: "Série diária de vendas no período",
     fetcher: getSalesDaily,
   },
-  "sales-active": {
-    title: "Vendas — Ativas",
-    description: "Série diária de vendas ativas",
+  "sales-active-with-budget": {
+    title: "Vendas Ativas — Com Orçamento",
+    description: "Série diária de vendas ativas com orçamento vinculado",
     fetcher: getSalesDaily,
     status: "Ativa",
+    hasLinkedBudget: "true",
+  },
+  "sales-active-without-budget": {
+    title: "Vendas Ativas — Sem Orçamento",
+    description: "Série diária de vendas ativas sem orçamento vinculado",
+    fetcher: getSalesDaily,
+    status: "Ativa",
+    hasLinkedBudget: "false",
   },
   "sales-canceled": {
     title: "Vendas — Canceladas",
     description: "Série diária de vendas canceladas",
     fetcher: getSalesDaily,
     status: "Cancelada",
+  },
+  "followup-within24h-converted": {
+    title: "Follow-up ≤ 24h — Convertidos",
+    description: "Série diária de follow-up convertidos na janela de 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "within24h", "converted"),
+    followUpWindow: "within24h",
+    followUpStatus: "converted",
+  },
+  "followup-within24h-lost": {
+    title: "Follow-up ≤ 24h — Não Convertidos",
+    description: "Série diária de follow-up não convertidos na janela de 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "within24h", "lost"),
+    followUpWindow: "within24h",
+    followUpStatus: "lost",
+  },
+  "followup-within24h-open": {
+    title: "Follow-up ≤ 24h — Não Executados",
+    description: "Série diária de follow-up não executados na janela de 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "within24h", "open"),
+    followUpWindow: "within24h",
+    followUpStatus: "open",
+  },
+  "followup-after24h-converted": {
+    title: "Follow-up > 24h — Convertidos",
+    description: "Série diária de follow-up convertidos pós 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "after24h", "converted"),
+    followUpWindow: "after24h",
+    followUpStatus: "converted",
+  },
+  "followup-after24h-lost": {
+    title: "Follow-up > 24h — Não Convertidos",
+    description: "Série diária de follow-up não convertidos pós 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "after24h", "lost"),
+    followUpWindow: "after24h",
+    followUpStatus: "lost",
+  },
+  "followup-after24h-open": {
+    title: "Follow-up > 24h — Não Executados",
+    description: "Série diária de follow-up não executados pós 24h",
+    fetcher: (opts) => getFollowUpDailySeries(opts as KpiOpts & { referenceAt: string }, "after24h", "open"),
+    followUpWindow: "after24h",
+    followUpStatus: "open",
   },
 }
 
@@ -106,6 +166,7 @@ interface KpiDrilldownDialogProps {
   from: string
   to: string
   sellerId?: string
+  referenceAt?: string
 }
 
 export function KpiDrilldownDialog({
@@ -117,6 +178,7 @@ export function KpiDrilldownDialog({
   from,
   to,
   sellerId,
+  referenceAt,
 }: KpiDrilldownDialogProps) {
   const router = useRouter()
   const [data, setData] = React.useState<DailySeries | null>(null)
@@ -124,15 +186,28 @@ export function KpiDrilldownDialog({
   const [error, setError] = React.useState<string | null>(null)
 
   const isBudgetKind = kind?.startsWith("budgets-") ?? false
+  const isSalesKind = kind?.startsWith("sales-") ?? false
+  const isFollowUpKind = kind?.startsWith("followup-") ?? false
+  const isClickable = isBudgetKind || isSalesKind || isFollowUpKind
 
   function navigateToDay(date: string) {
-    if (!kind || !isBudgetKind) return
+    if (!kind || !isClickable) return
     const config = DRILLDOWN_CONFIG[kind]
     const params = new URLSearchParams({ from: date, to: date })
     if (sellerId) params.set("sellerId", sellerId)
     if (config.status) params.set("status", config.status)
+    if (config.hasLinkedBudget) params.set("hasLinkedBudget", config.hasLinkedBudget)
     onOpenChange(false)
-    router.push(`/dashboard/orcamentos?${params}`)
+    if (isBudgetKind) {
+      router.push(`/dashboard/orcamentos?${params}`)
+    } else if (isSalesKind) {
+      router.push(`/dashboard/vendas?${params}`)
+    } else if (isFollowUpKind) {
+      if (referenceAt) params.set("referenceAt", referenceAt)
+      if (config.followUpWindow) params.set("followUpWindow", config.followUpWindow)
+      if (config.followUpStatus) params.set("followUpStatus", config.followUpStatus)
+      router.push(`/dashboard/followup?${params}`)
+    }
   }
 
   React.useEffect(() => {
@@ -144,11 +219,11 @@ export function KpiDrilldownDialog({
     setData(null)
 
     config
-      .fetcher({ token, tenantId, from, to, status: config.status, sellerId })
+      .fetcher({ token, tenantId, from, to, status: config.status, hasLinkedBudget: config.hasLinkedBudget, sellerId, referenceAt })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [open, kind, token, tenantId, from, to, sellerId])
+  }, [open, kind, token, tenantId, from, to, sellerId, referenceAt])
 
   const config = kind ? DRILLDOWN_CONFIG[kind] : null
 
@@ -201,12 +276,12 @@ export function KpiDrilldownDialog({
                 {data.series.map((row) => (
                   <TableRow
                     key={row.date}
-                    className={isBudgetKind ? "cursor-pointer hover:bg-muted/50" : ""}
-                    onClick={() => isBudgetKind && navigateToDay(row.date)}
+                    className={isClickable ? "cursor-pointer hover:bg-muted/50" : ""}
+                    onClick={() => isClickable && navigateToDay(row.date)}
                   >
                     <TableCell>
                       {formatDate(row.date)}
-                      {isBudgetKind && (
+                      {isClickable && (
                         <span className="ml-1.5 text-muted-foreground text-xs">→</span>
                       )}
                     </TableCell>

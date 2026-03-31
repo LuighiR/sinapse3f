@@ -615,24 +615,17 @@ export function WhatsAppSection({
 
     setLoading(true)
     Promise.all([
-      getWhatsAppSummary(opts),
-      getWhatsAppAgentsRanking(opts),
-      getWhatsAppSessionsHourly(opts),
-      getWhatsAppMessagesHourly(opts),
-      getWhatsAppTags(opts),
-    ])
-      .then(([s, r, sh, mh, t]) => {
-        setSummary(s)
-        setRanking(r)
-        setSessionsHourly(sh)
-        setMessagesHourly(mh)
+      getWhatsAppSummary(opts).then(setSummary).catch((e) => console.error("[KPI] whatsapp summary", e)),
+      getWhatsAppAgentsRanking(opts).then(setRanking).catch((e) => console.error("[KPI] whatsapp ranking", e)),
+      getWhatsAppSessionsHourly(opts).then(setSessionsHourly).catch((e) => console.error("[KPI] whatsapp sessions hourly", e)),
+      getWhatsAppMessagesHourly(opts).then(setMessagesHourly).catch((e) => console.error("[KPI] whatsapp messages hourly", e)),
+      getWhatsAppTags(opts).then((t) => {
         setTags(t.tags)
         if (t.tags.length > 0 && !selectedTagId) {
           setSelectedTagId(t.tags[0].tagId)
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      }).catch((e) => console.error("[KPI] whatsapp tags", e)),
+    ]).finally(() => setLoading(false))
   }, [session, from, to, refreshKey, chatId])
 
   function openDrilldown(kind: WhatsAppDrilldownKind) {
