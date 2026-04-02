@@ -373,6 +373,7 @@ interface WaDrilldownDialogProps {
   to: string
   chatId?: string
   sellerId?: string
+  branchId?: string
   tags: WhatsAppTag[]
   selectedTagId: string
   onTagChange: (tagId: string) => void
@@ -388,6 +389,7 @@ function WaDrilldownDialog({
   to,
   chatId,
   sellerId,
+  branchId,
   tags,
   selectedTagId,
   onTagChange,
@@ -405,7 +407,7 @@ function WaDrilldownDialog({
   React.useEffect(() => {
     if (!open || !kind) return
 
-    const opts: KpiOpts = { token, tenantId, from, to, chatId }
+    const opts: KpiOpts = { token, tenantId, from, to, chatId, branchId }
     setLoading(true)
     setError(null)
     setSessionsDaily(null)
@@ -460,7 +462,7 @@ function WaDrilldownDialog({
         setLoading(false)
       }
     }
-  }, [open, kind, token, tenantId, from, to, selectedTagId, chatId, sellerId])
+  }, [open, kind, token, tenantId, from, to, selectedTagId, chatId, sellerId, branchId])
 
   const titles: Record<WhatsAppDrilldownKind, { title: string; desc: string }> = {
     "wa-conversations": {
@@ -590,12 +592,14 @@ export function WhatsAppSection({
   to,
   chatId,
   sellerId,
+  branchId,
 }: {
   refreshKey?: number
   from: string
   to: string
   chatId?: string
   sellerId?: string
+  branchId?: string
 }) {
   const { session } = useAuth()
   const [summary, setSummary] = React.useState<WhatsAppSummary | null>(null)
@@ -611,7 +615,7 @@ export function WhatsAppSection({
 
   React.useEffect(() => {
     if (!session) return
-    const opts: KpiOpts = { token: session.accessToken, tenantId: session.tenantId, from, to, chatId }
+    const opts: KpiOpts = { token: session.accessToken, tenantId: session.tenantId, from, to, chatId, branchId }
 
     setLoading(true)
     Promise.all([
@@ -626,7 +630,7 @@ export function WhatsAppSection({
         }
       }).catch((e) => console.error("[KPI] whatsapp tags", e)),
     ]).finally(() => setLoading(false))
-  }, [session, from, to, refreshKey, chatId])
+  }, [session, from, to, refreshKey, chatId, branchId])
 
   function openDrilldown(kind: WhatsAppDrilldownKind) {
     setDrilldownKind(kind)
@@ -672,14 +676,14 @@ export function WhatsAppSection({
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5 dark:*:data-[slot=card]:bg-card">
+        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
           {loading ? (
             skeletons
           ) : summary ? (
             <>
               {/* Total de Conversas */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                 onClick={() => openDrilldown("wa-conversations")}
               >
                 <CardHeader>
@@ -707,7 +711,7 @@ export function WhatsAppSection({
 
               {/* Mensagens Recebidas */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                 onClick={() => openDrilldown("wa-messages")}
               >
                 <CardHeader>
@@ -735,7 +739,7 @@ export function WhatsAppSection({
 
               {/* Ranking — Top 3 */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                 onClick={() => openDrilldown("wa-ranking")}
               >
                 <CardHeader>
@@ -768,7 +772,7 @@ export function WhatsAppSection({
 
               {/* Picos de Sessões — Top 3 */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                 onClick={() => openDrilldown("wa-session-peaks")}
               >
                 <CardHeader>
@@ -799,7 +803,7 @@ export function WhatsAppSection({
 
               {/* Picos de Mensagens — Top 3 */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                 onClick={() => openDrilldown("wa-message-peaks")}
               >
                 <CardHeader>
@@ -877,7 +881,7 @@ export function WhatsAppSection({
                 <CardDescription>Comparativo por hora — sessões da tag vs orçamentos</CardDescription>
               </CardHeader>
               <CardContent>
-                <TagComparisonPreview token={session!.accessToken} tenantId={session!.tenantId} from={from} to={to} tagId={selectedTagId} chatId={chatId} sellerId={sellerId} />
+                <TagComparisonPreview token={session!.accessToken} tenantId={session!.tenantId} from={from} to={to} tagId={selectedTagId} chatId={chatId} sellerId={sellerId} branchId={branchId} />
               </CardContent>
             </Card>
           </div>
@@ -895,6 +899,7 @@ export function WhatsAppSection({
           to={to}
           chatId={chatId}
           sellerId={sellerId}
+          branchId={branchId}
           tags={tags}
           selectedTagId={selectedTagId}
           onTagChange={setSelectedTagId}
@@ -913,6 +918,7 @@ function TagComparisonPreview({
   tagId,
   chatId,
   sellerId,
+  branchId,
 }: {
   token: string
   tenantId: string
@@ -921,15 +927,16 @@ function TagComparisonPreview({
   tagId: string
   chatId?: string
   sellerId?: string
+  branchId?: string
 }) {
   const [data, setData] = React.useState<WhatsAppTagComparison | null>(null)
 
   React.useEffect(() => {
     if (!tagId) return
-    getWhatsAppTagComparison({ token, tenantId, from, to, tagId, chatId, sellerId })
+    getWhatsAppTagComparison({ token, tenantId, from, to, tagId, chatId, sellerId, branchId })
       .then(setData)
       .catch(() => {})
-  }, [token, tenantId, from, to, tagId, chatId, sellerId])
+  }, [token, tenantId, from, to, tagId, chatId, sellerId, branchId])
 
   if (!tagId) {
     return (

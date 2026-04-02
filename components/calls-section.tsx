@@ -305,6 +305,7 @@ interface CallsDrilldownDialogProps {
   to: string
   extensionUuid?: string
   extensionNumber?: string
+  branchId?: string
 }
 
 function CallsDrilldownDialog({
@@ -317,6 +318,7 @@ function CallsDrilldownDialog({
   to,
   extensionUuid,
   extensionNumber,
+  branchId,
 }: CallsDrilldownDialogProps) {
   const [hourlyData, setHourlyData] = React.useState<CallsHourly | null>(null)
   const [rankingData, setRankingData] = React.useState<CallsAgentsRanking | null>(null)
@@ -327,7 +329,7 @@ function CallsDrilldownDialog({
   React.useEffect(() => {
     if (!open || !kind) return
 
-    const opts: KpiOpts = { token, tenantId, from, to, extensionUuid, extensionNumber }
+    const opts: KpiOpts = { token, tenantId, from, to, extensionUuid, extensionNumber, branchId }
     setLoading(true)
     setError(null)
     setHourlyData(null)
@@ -350,7 +352,7 @@ function CallsDrilldownDialog({
         .catch((e: Error) => setError(e.message))
         .finally(() => setLoading(false))
     }
-  }, [open, kind, token, tenantId, from, to])
+  }, [open, kind, token, tenantId, from, to, branchId])
 
   const titles: Record<CallsDrilldownKind, { title: string; desc: string }> = {
     "calls-lost": {
@@ -449,12 +451,14 @@ export function CallsSection({
   to,
   extensionUuid,
   extensionNumber,
+  branchId,
 }: {
   refreshKey?: number
   from: string
   to: string
   extensionUuid?: string
   extensionNumber?: string
+  branchId?: string
 }) {
   const { session } = useAuth()
   const [summary, setSummary] = React.useState<CallsSummary | null>(null)
@@ -467,7 +471,7 @@ export function CallsSection({
 
   React.useEffect(() => {
     if (!session) return
-    const opts: KpiOpts = { token: session.accessToken, tenantId: session.tenantId, from, to, extensionUuid, extensionNumber }
+    const opts: KpiOpts = { token: session.accessToken, tenantId: session.tenantId, from, to, extensionUuid, extensionNumber, branchId }
 
     setLoading(true)
     Promise.all([
@@ -475,7 +479,7 @@ export function CallsSection({
       getCallsHourly(opts).then(setHourly).catch((e) => console.error("[KPI] calls hourly", e)),
       getCallsAgentsRanking(opts).then(setRanking).catch((e) => console.error("[KPI] calls ranking", e)),
     ]).finally(() => setLoading(false))
-  }, [session, from, to, refreshKey, extensionUuid, extensionNumber])
+  }, [session, from, to, refreshKey, extensionUuid, extensionNumber, branchId])
 
   function openDrilldown(kind: CallsDrilldownKind) {
     setDrilldownKind(kind)
@@ -515,14 +519,14 @@ export function CallsSection({
         </div>
 
         {/* KPI Cards — row 1 */}
-        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5 dark:*:data-[slot=card]:bg-card">
+        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
           {loading ? (
             skeletons
           ) : summary ? (
             <>
               {/* Ligações Perdidas */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
                 onClick={() => openDrilldown("calls-lost")}
               >
                 <CardHeader>
@@ -550,7 +554,7 @@ export function CallsSection({
 
               {/* Ligações Recebidas */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                 onClick={() => openDrilldown("calls-received")}
               >
                 <CardHeader>
@@ -578,7 +582,7 @@ export function CallsSection({
 
               {/* Ranking — Top 3 */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                 onClick={() => openDrilldown("calls-ranking")}
               >
                 <CardHeader>
@@ -610,7 +614,7 @@ export function CallsSection({
               </Card>
 
               {/* Orçamentos em Aberto via Ligação */}
-              <Card className="@container/card">
+              <Card className="@container/card bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60">
                 <CardHeader>
                   <CardDescription>Orç. Abertos Televendas</CardDescription>
                   <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -635,7 +639,7 @@ export function CallsSection({
 
               {/* Picos — Top 3 */}
               <Card
-                className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                 onClick={() => openDrilldown("calls-peak")}
               >
                 <CardHeader>
@@ -710,7 +714,7 @@ export function CallsSection({
                 <CardDescription>Ligações vs Orçamentos Televendas</CardDescription>
               </CardHeader>
               <CardContent>
-                <ComparisonPreview token={session!.accessToken} tenantId={session!.tenantId} from={from} to={to} extensionUuid={extensionUuid} extensionNumber={extensionNumber} />
+                <ComparisonPreview token={session!.accessToken} tenantId={session!.tenantId} from={from} to={to} extensionUuid={extensionUuid} extensionNumber={extensionNumber} branchId={branchId} />
               </CardContent>
             </Card>
           </div>
@@ -728,6 +732,7 @@ export function CallsSection({
           to={to}
           extensionUuid={extensionUuid}
           extensionNumber={extensionNumber}
+          branchId={branchId}
         />
       )}
     </>
@@ -742,6 +747,7 @@ function ComparisonPreview({
   to,
   extensionUuid,
   extensionNumber,
+  branchId,
 }: {
   token: string
   tenantId: string
@@ -749,14 +755,15 @@ function ComparisonPreview({
   to: string
   extensionUuid?: string
   extensionNumber?: string
+  branchId?: string
 }) {
   const [data, setData] = React.useState<CallsHourlyComparison | null>(null)
 
   React.useEffect(() => {
-    getCallsHourlyComparison({ token, tenantId, from, to, extensionUuid, extensionNumber })
+    getCallsHourlyComparison({ token, tenantId, from, to, extensionUuid, extensionNumber, branchId })
       .then(setData)
       .catch(() => {})
-  }, [token, tenantId, from, to, extensionUuid, extensionNumber])
+  }, [token, tenantId, from, to, extensionUuid, extensionNumber, branchId])
 
   if (!data) return <Skeleton className="h-40 w-full" />
 

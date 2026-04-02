@@ -52,10 +52,12 @@ import {
   refreshSales,
   refreshCalls,
   getEmployees,
+  getBranches,
   type BudgetSummary,
   type SalesSummary,
   type FollowUpSummary,
   type Employee,
+  type Branch,
 } from "@/lib/api"
 import {
   KpiDrilldownDialog,
@@ -126,10 +128,17 @@ export function SectionCards() {
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>("")
   const [employees, setEmployees] = React.useState<Employee[]>([])
 
+  // ── Branch filter ──
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
+  const [branches, setBranches] = React.useState<Branch[]>([])
+
   React.useEffect(() => {
     if (!session) return
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
+      .catch(() => {})
+    getBranches({ token: session.accessToken, tenantId: session.tenantId })
+      .then(setBranches)
       .catch(() => {})
   }, [session])
 
@@ -143,6 +152,7 @@ export function SectionCards() {
   const extensionUuid = selectedEmployee?.extensionUuid ?? undefined
   const extensionNumber = selectedEmployee?.extensionNumber ?? undefined
   const chatId = selectedEmployee?.chatId ?? undefined
+  const branchId = selectedBranchId || undefined
 
   const { from, to } = React.useMemo(() => {
     if (filterMode === "month") {
@@ -167,6 +177,7 @@ export function SectionCards() {
       from,
       to,
       ...(sellerId ? { sellerId } : {}),
+      ...(branchId ? { branchId } : {}),
     }
 
     setLoading(true)
@@ -192,7 +203,7 @@ export function SectionCards() {
         toast.error("Erro ao carregar follow-up")
       }),
     ]).finally(() => setLoading(false))
-  }, [session, from, to, sellerId])
+  }, [session, from, to, sellerId, branchId])
 
   React.useEffect(() => {
     fetchData()
@@ -207,6 +218,7 @@ export function SectionCards() {
       from,
       to,
       ...(sellerId ? { sellerId } : {}),
+      ...(branchId ? { branchId } : {}),
     }
 
     try {
@@ -365,6 +377,24 @@ export function SectionCards() {
             </SelectContent>
           </Select>
 
+          {/* Branch filter */}
+          <Select
+            value={selectedBranchId || "__all__"}
+            onValueChange={(v) => setSelectedBranchId(v === "__all__" ? "" : v)}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Todas Filiais" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas Filiais</SelectItem>
+              {branches.map((b) => (
+                <SelectItem key={b.id} value={String(b.id)}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* period label */}
           <span className="text-xs text-muted-foreground ml-auto hidden sm:inline">
             {from} → {to}
@@ -388,13 +418,13 @@ export function SectionCards() {
             <FileSpreadsheetIcon className="size-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Orçamentos</h2>
           </div>
-          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
             {loading ? (
               skeletons
             ) : budgets ? (
               <>
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                   onClick={() => openDrilldown("budgets-total")}
                 >
                   <CardHeader>
@@ -420,7 +450,7 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                   onClick={() => openDrilldown("budgets-won")}
                 >
                   <CardHeader>
@@ -446,7 +476,7 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                   onClick={() => openDrilldown("budgets-open")}
                 >
                   <CardHeader>
@@ -472,11 +502,11 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
                   onClick={() => openDrilldown("budgets-lost")}
                 >
                   <CardHeader>
-                    <CardDescription>Cancelados</CardDescription>
+                    <CardDescription>Perdidos</CardDescription>
                     <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                       {formatNumber(budgets.lost.count)}
                     </CardTitle>
@@ -535,14 +565,14 @@ export function SectionCards() {
                     <span className="text-xs font-normal normal-case">— {formatNumber(followUp.within24h.total.count)} orçamentos · {formatCurrency(Number(followUp.within24h.total.value))}</span>
                   )}
                 </h3>
-                <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-3 dark:*:data-[slot=card]:bg-card">
+                <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-3">
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                     onClick={() => openDrilldown("followup-within24h-converted")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP convertidos</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300 @[250px]/card:text-4xl">
                         {Number(followUp.within24h.converted.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -563,12 +593,12 @@ export function SectionCards() {
                   </Card>
 
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
                     onClick={() => openDrilldown("followup-within24h-lost")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP não convertidos</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-red-700 dark:text-red-400 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-rose-500 dark:text-rose-300 @[250px]/card:text-4xl">
                         {Number(followUp.within24h.lost.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -589,12 +619,12 @@ export function SectionCards() {
                   </Card>
 
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                     onClick={() => openDrilldown("followup-within24h-open")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP não executados</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-slate-800 dark:text-slate-300 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-300 @[250px]/card:text-4xl">
                         {Number(followUp.within24h.open.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -623,14 +653,14 @@ export function SectionCards() {
                     <span className="text-xs font-normal normal-case">— {formatNumber(followUp.after24h.total.count)} orçamentos · {formatCurrency(Number(followUp.after24h.total.value))}</span>
                   )}
                 </h3>
-                <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-3 dark:*:data-[slot=card]:bg-card">
+                <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-3">
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                     onClick={() => openDrilldown("followup-after24h-converted")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP convertidos</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300 @[250px]/card:text-4xl">
                         {Number(followUp.after24h.converted.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -651,12 +681,12 @@ export function SectionCards() {
                   </Card>
 
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
                     onClick={() => openDrilldown("followup-after24h-lost")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP não convertidos</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-red-700 dark:text-red-400 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-rose-500 dark:text-rose-300 @[250px]/card:text-4xl">
                         {Number(followUp.after24h.lost.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -677,12 +707,12 @@ export function SectionCards() {
                   </Card>
 
                   <Card
-                    className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                    className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                     onClick={() => openDrilldown("followup-after24h-open")}
                   >
                     <CardHeader>
                       <CardDescription>Follow UP não executados</CardDescription>
-                      <CardTitle className="text-3xl font-bold tabular-nums text-slate-800 dark:text-slate-300 @[250px]/card:text-4xl">
+                      <CardTitle className="text-3xl font-bold tabular-nums text-amber-600 dark:text-amber-300 @[250px]/card:text-4xl">
                         {Number(followUp.after24h.open.percentage).toFixed(2).replace(".", ",")}%
                       </CardTitle>
                       <CardAction>
@@ -712,13 +742,13 @@ export function SectionCards() {
             <ShoppingCartIcon className="size-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Vendas</h2>
           </div>
-          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5 dark:*:data-[slot=card]:bg-card">
+          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
             {loading ? (
               skeletons
             ) : sales ? (
               <>
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
                   onClick={() => openDrilldown("sales-total")}
                 >
                   <CardHeader>
@@ -744,7 +774,7 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
                   onClick={() => openDrilldown("sales-active-with-budget")}
                 >
                   <CardHeader>
@@ -770,7 +800,7 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-amber-50 dark:bg-amber-950/30 border-amber-200/60 dark:border-amber-800/60"
                   onClick={() => openDrilldown("sales-active-without-budget")}
                 >
                   <CardHeader>
@@ -796,11 +826,11 @@ export function SectionCards() {
                 </Card>
 
                 <Card
-                  className="@container/card cursor-pointer transition-shadow hover:shadow-md"
+                  className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
                   onClick={() => openDrilldown("sales-canceled")}
                 >
                   <CardHeader>
-                    <CardDescription>Canceladas</CardDescription>
+                    <CardDescription>NFe Canceladas</CardDescription>
                     <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                       {formatNumber(sales.canceled.count)}
                     </CardTitle>
@@ -821,7 +851,7 @@ export function SectionCards() {
                   </CardFooter>
                 </Card>
 
-                <Card className="@container/card">
+                <Card className="@container/card bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60">
                   <CardHeader>
                     <CardDescription>Ticket Médio</CardDescription>
                     <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -852,10 +882,10 @@ export function SectionCards() {
         </div>
 
         {/* Ligações */}
-        <CallsSection refreshKey={refreshKey} from={from} to={to} extensionUuid={extensionUuid} extensionNumber={extensionNumber} />
+        <CallsSection refreshKey={refreshKey} from={from} to={to} extensionUuid={extensionUuid} extensionNumber={extensionNumber} branchId={branchId} />
 
         {/* WhatsApp */}
-        <WhatsAppSection refreshKey={refreshKey} from={from} to={to} chatId={chatId} sellerId={sellerId} />
+        <WhatsAppSection refreshKey={refreshKey} from={from} to={to} chatId={chatId} sellerId={sellerId} branchId={branchId} />
       </div>
 
       {session && (
@@ -868,6 +898,7 @@ export function SectionCards() {
           from={from}
           to={to}
           sellerId={sellerId}
+          branchId={branchId}
           referenceAt={`${to}T23:59:59-03:00`}
         />
       )}

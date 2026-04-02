@@ -23,8 +23,10 @@ import { useAuth } from "@/lib/auth-context"
 import {
   getSalesDrilldown,
   getEmployees,
+  getBranches,
   type SalesDrilldownRow,
   type Employee,
+  type Branch,
 } from "@/lib/api"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -152,10 +154,17 @@ export default function VendasPage() {
     qSellerId ?? "all",
   )
 
+  /* ── branches ── */
+  const [branches, setBranches] = React.useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
+
   React.useEffect(() => {
     if (!session) return
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
+      .catch(() => {})
+    getBranches({ token: session.accessToken, tenantId: session.tenantId })
+      .then(setBranches)
       .catch(() => {})
   }, [session])
 
@@ -166,6 +175,7 @@ export default function VendasPage() {
   const sellerId = selectedEmployee
     ? String(selectedEmployee.erpId)
     : qSellerId ?? undefined
+  const branchId = selectedBranchId !== "all" ? selectedBranchId : undefined
 
   /* ── status filter ── */
   const [status, setStatus] = React.useState<string>(qStatus ?? "all")
@@ -199,6 +209,7 @@ export default function VendasPage() {
       from,
       to,
       sellerId,
+      branchId,
       status: status !== "all" ? status : undefined,
       hasLinkedBudget: hasLinkedBudget !== "all" ? hasLinkedBudget : undefined,
     })
@@ -214,7 +225,7 @@ export default function VendasPage() {
         if (key !== fetchKey.current) return
         setLoading(false)
       })
-  }, [session, from, to, sellerId, status, hasLinkedBudget])
+  }, [session, from, to, sellerId, branchId, status, hasLinkedBudget])
 
   /* ── client-side search filter ── */
   const filtered = React.useMemo(() => {
@@ -404,6 +415,24 @@ export default function VendasPage() {
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={String(e.id)}>
                         {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* branch filter */}
+                <Select
+                  value={selectedBranchId}
+                  onValueChange={setSelectedBranchId}
+                >
+                  <SelectTrigger className="h-8 w-[180px] text-xs">
+                    <SelectValue placeholder="Todas Filiais" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Filiais</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

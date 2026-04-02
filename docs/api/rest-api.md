@@ -530,6 +530,7 @@ Regra:
 - `within24h.total` e `after24h.total` representam o total de cada janela
 - o frontend pode usar `total.count` / `total.value` como base de 100% para exibir os cards
 - `referenceAt` aceita timestamp com offset (`-03:00`) ou sem offset; quando o offset nao vier, a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
 
 Response `200`:
 
@@ -620,6 +621,7 @@ Regra:
 - se `cancelationTime` nao existir ou vier invalido, o cancelamento cai no fim do dia de `cancellationDate`
 - `followUpWindow` e `followUpStatus` sao classificacoes de follow-up, e nao filtros brutos de status do budget
 - `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
 - o frontend pode usar `rows[].date` junto com `rows[].window` e `rows[].status` para montar a grade diaria
 - a resposta vem densa/zero-filled para cada dia solicitado e para cada combinacao de `window` e `status`, mesmo quando nao houver registros
 
@@ -686,6 +688,7 @@ Regra:
 - budgets `LOST` usam `cancellationDate + cancelationTime` como timestamp terminal; budgets `WON` usam `closingDate + closing_time`
 - se `cancelationTime` nao existir ou vier invalido, o cancelamento cai no fim do dia de `cancellationDate`
 - `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
 - o objeto `filters` da resposta ecoa `referenceAt` e inclui `date`, `followUpWindow`, `followUpStatus`, `sellerId` e `orderType` quando esses filtros forem informados
 
 Exemplo:
@@ -1361,12 +1364,15 @@ WhatsApp e mensageria aceitam:
 - `from` required
 - `to` required
 - `chatId` optional
+- `branchId` optional
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
 As metricas sao lidas diretamente das tabelas canonicas `core.sessions`, `core.messages`, `core.tickets`, `core.contacts`, `core.tags` e `core.contact_tags`.
 
 Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente e o filtro e aplicado diretamente por `core.sessions.assigned_user_email`, com comparacao case-insensitive.
+
+Quando `branchId` e informado nas rotas analiticas de WhatsApp, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))` dentro da filial selecionada. Registros sem match resolvivel ou com match ambiguo nao entram no resultado filtrado.
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
@@ -1380,6 +1386,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1409,6 +1416,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1454,6 +1462,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1483,6 +1492,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1520,6 +1530,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1606,6 +1617,7 @@ Query Params:
 - `to`
 - `tagId`
 - `chatId` optional
+- `branchId` optional
 
 Response `200`:
 
@@ -1637,6 +1649,7 @@ Query Params:
 - `to`
 - `tagId`
 - `chatId` optional
+- `branchId` optional
 - `sellerId` optional
 
 Response `200`:

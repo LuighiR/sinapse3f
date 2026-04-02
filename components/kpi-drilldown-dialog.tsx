@@ -166,6 +166,7 @@ interface KpiDrilldownDialogProps {
   from: string
   to: string
   sellerId?: string
+  branchId?: string
   referenceAt?: string
 }
 
@@ -178,6 +179,7 @@ export function KpiDrilldownDialog({
   from,
   to,
   sellerId,
+  branchId,
   referenceAt,
 }: KpiDrilldownDialogProps) {
   const router = useRouter()
@@ -219,11 +221,11 @@ export function KpiDrilldownDialog({
     setData(null)
 
     config
-      .fetcher({ token, tenantId, from, to, status: config.status, hasLinkedBudget: config.hasLinkedBudget, sellerId, referenceAt })
+      .fetcher({ token, tenantId, from, to, status: config.status, hasLinkedBudget: config.hasLinkedBudget, sellerId, branchId, referenceAt })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [open, kind, token, tenantId, from, to, sellerId, referenceAt])
+  }, [open, kind, token, tenantId, from, to, sellerId, branchId, referenceAt])
 
   const config = kind ? DRILLDOWN_CONFIG[kind] : null
 

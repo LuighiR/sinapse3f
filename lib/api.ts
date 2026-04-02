@@ -23,6 +23,11 @@ export async function api<T>(
   const res = await fetch(`${API_BASE}${path}`, { headers, ...rest })
 
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/")) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("session-expired"))
+      }
+    }
     const body = await res.json().catch(() => ({}))
     throw new ApiError(res.status, body.message ?? res.statusText)
   }
@@ -79,6 +84,19 @@ export function refreshTokens(refreshToken: string) {
 }
 
 // ── Company ──
+
+export interface Branch {
+  id: number
+  name: string
+  clientId: string
+}
+
+export function getBranches(opts: { token: string; tenantId: string }) {
+  return api<Branch[]>("/companies/current/branches", {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
 
 export interface Employee {
   id: number
@@ -152,6 +170,7 @@ export interface KpiOpts {
   from: string
   to: string
   sellerId?: string
+  branchId?: string
   status?: string
   orderType?: string
   referenceAt?: string
@@ -164,6 +183,7 @@ export interface KpiOpts {
 function kpiParams(opts: KpiOpts) {
   const p: Record<string, string> = { from: opts.from, to: opts.to }
   if (opts.sellerId) p.sellerId = opts.sellerId
+  if (opts.branchId) p.branchId = opts.branchId
   if (opts.status) p.status = opts.status
   if (opts.orderType) p.orderType = opts.orderType
   if (opts.hasLinkedBudget) p.hasLinkedBudget = opts.hasLinkedBudget

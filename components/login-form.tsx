@@ -50,12 +50,16 @@ export function LoginForm({
         return
       }
 
+      const envSeconds = Number(process.env.NEXT_PUBLIC_SESSION_DURATION_SECONDS)
+      const durationMs = (res.expiresInSeconds || (envSeconds > 0 ? envSeconds : 3600)) * 1000
+
       setSession({
         accessToken: res.accessToken,
         refreshToken: res.refreshToken,
         user: res.user,
         tenantId: tenant.id,
         tenantName: tenant.name,
+        expiresAt: Date.now() + durationMs,
       })
 
       router.push("/dashboard")

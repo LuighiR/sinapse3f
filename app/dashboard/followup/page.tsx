@@ -23,8 +23,10 @@ import { useAuth } from "@/lib/auth-context"
 import {
   getBudgetFollowUpDrilldown,
   getEmployees,
+  getBranches,
   type FollowUpDrilldownRow,
   type Employee,
+  type Branch,
 } from "@/lib/api"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -179,10 +181,17 @@ export default function FollowUpPage() {
     qSellerId ?? "all",
   )
 
+  /* ── branches ── */
+  const [branches, setBranches] = React.useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
+
   React.useEffect(() => {
     if (!session) return
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
+      .catch(() => {})
+    getBranches({ token: session.accessToken, tenantId: session.tenantId })
+      .then(setBranches)
       .catch(() => {})
   }, [session])
 
@@ -193,6 +202,7 @@ export default function FollowUpPage() {
   const sellerId = selectedEmployee
     ? String(selectedEmployee.erpId)
     : qSellerId ?? undefined
+  const branchId = selectedBranchId !== "all" ? selectedBranchId : undefined
 
   /* ── follow-up filters ── */
   const [followUpWindow, setFollowUpWindow] = React.useState<string>(
@@ -227,6 +237,7 @@ export default function FollowUpPage() {
       to,
       referenceAt,
       sellerId,
+      branchId,
       followUpWindow: followUpWindow !== "all" ? followUpWindow : undefined,
       followUpStatus: followUpStatus !== "all" ? followUpStatus : undefined,
     })
@@ -242,7 +253,7 @@ export default function FollowUpPage() {
         if (key !== fetchKey.current) return
         setLoading(false)
       })
-  }, [session, from, to, referenceAt, sellerId, followUpWindow, followUpStatus])
+  }, [session, from, to, referenceAt, sellerId, branchId, followUpWindow, followUpStatus])
 
   /* ── client-side search filter ── */
   const filtered = React.useMemo(() => {
@@ -430,6 +441,24 @@ export default function FollowUpPage() {
                     {employees.map((e) => (
                       <SelectItem key={e.id} value={String(e.id)}>
                         {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* branch filter */}
+                <Select
+                  value={selectedBranchId}
+                  onValueChange={setSelectedBranchId}
+                >
+                  <SelectTrigger className="h-8 w-[180px] text-xs">
+                    <SelectValue placeholder="Todas Filiais" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas Filiais</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -36,7 +36,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useTheme()
-  const { setSession } = useAuth()
+  const { logout } = useAuth()
   const router = useRouter()
 
   function toggleTheme() {
@@ -44,8 +44,7 @@ export function NavUser({
   }
 
   function handleLogout() {
-    setSession(null)
-    router.replace("/login")
+    logout()
   }
 
   return (
