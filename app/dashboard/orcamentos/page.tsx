@@ -16,9 +16,11 @@ import {
   CalendarIcon,
   ArrowLeftIcon,
   SearchIcon,
+  DownloadIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import {
   getBudgetDrilldown,
@@ -28,6 +30,10 @@ import {
   type Employee,
   type Branch,
 } from "@/lib/api"
+import {
+  buildBudgetExportCsv,
+  buildBudgetExportFilename,
+} from "@/lib/budget-export"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -256,6 +262,31 @@ export default function OrcamentosPage() {
     )
   }, [filtered])
 
+  function handleExportCsv() {
+    if (filtered.length === 0) {
+      toast.error("Nenhum orçamento filtrado para exportar")
+      return
+    }
+
+    const csv = buildBudgetExportCsv(filtered)
+    const filename = buildBudgetExportFilename(from, to)
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+
+    toast.success(
+      `${formatNumber(filtered.length)} orçamento${filtered.length === 1 ? "" : "s"} exportado${filtered.length === 1 ? "" : "s"}`,
+    )
+  }
+
   if (!session) return null
 
   return (
@@ -293,6 +324,16 @@ export default function OrcamentosPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={handleExportCsv}
+                    disabled={loading || filtered.length === 0}
+                  >
+                    <DownloadIcon className="size-4" />
+                    Exportar CSV
+                  </Button>
                   <Badge variant="outline" className="tabular-nums">
                     {formatNumber(totals.count)} registros
                   </Badge>
