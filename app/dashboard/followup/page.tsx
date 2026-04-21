@@ -3,38 +3,49 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  format,
-  startOfMonth,
   endOfMonth,
+  format,
   isFuture,
   isToday,
+  startOfMonth,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
+  ArrowLeftIcon,
+  CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CalendarIcon,
-  ArrowLeftIcon,
-  SearchIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  SearchIcon,
 } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+
 import {
+  getBranches,
   getBudgetFollowUpDrilldown,
   getEmployees,
-  getBranches,
-  type FollowUpDrilldownRow,
-  type Employee,
   type Branch,
+  type Employee,
+  type FollowUpDrilldownRow,
 } from "@/lib/api"
+import {
+  getNextSort,
+  sortRows,
+  type SortState,
+} from "@/lib/table-sorting"
+import { useAuth } from "@/lib/auth-context"
 import { AppSidebar } from "@/components/app-sidebar"
+import { SortableTableHead } from "@/components/sortable-table-head"
 import { SiteHeader } from "@/components/site-header"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -42,30 +53,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
 
-/* ── helpers ── */
-
-function toYMD(d: Date) {
-  return format(d, "yyyy-MM-dd")
+function toYMD(date: Date) {
+  return format(date, "yyyy-MM-dd")
 }
 
-function clampToday(d: Date) {
+function clampToday(date: Date) {
   const now = new Date()
-  return d > now ? now : d
+  return date > now ? now : date
 }
 
 function formatCurrency(value: number) {
@@ -81,13 +85,16 @@ function formatNumber(value: number) {
 }
 
 function formatDate(iso: string) {
-  const [y, m, d] = iso.split("-")
-  return `${d}/${m}/${y}`
+  const [year, month, day] = iso.split("-")
+  return `${day}/${month}/${year}`
 }
 
 const BUDGET_STATUS_LABELS: Record<
   string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  {
+    label: string
+    variant: "default" | "secondary" | "destructive" | "outline"
+  }
 > = {
   WON: { label: "Convertido", variant: "default" },
   OPEN: { label: "Em Aberto", variant: "secondary" },
@@ -101,7 +108,10 @@ const FOLLOWUP_WINDOW_LABELS: Record<string, string> = {
 
 const FOLLOWUP_STATUS_LABELS: Record<
   string,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+  {
+    label: string
+    variant: "default" | "secondary" | "destructive" | "outline"
+  }
 > = {
   converted: { label: "Convertido", variant: "default" },
   lost: { label: "Não Convertido", variant: "destructive" },
@@ -123,7 +133,17 @@ const STATUS_FILTER_OPTIONS = [
 
 const PAGE_SIZE = 25
 
-/* ── main page ── */
+type FollowUpSortColumn =
+  | "date"
+  | "customer"
+  | "seller"
+  | "budgetStatus"
+  | "window"
+  | "followUpStatus"
+  | "channel"
+  | "branch"
+  | "value"
+  | "dav"
 
 export default function FollowUpPage() {
   const { session } = useAuth()
@@ -134,29 +154,27 @@ export default function FollowUpPage() {
     if (!session) router.replace("/login")
   }, [session, router])
 
-  /* ── read query params (from KPI drilldown navigation) ── */
-  const qFrom = searchParams.get("from")
-  const qTo = searchParams.get("to")
-  const qSellerId = searchParams.get("sellerId")
-  const qReferenceAt = searchParams.get("referenceAt")
-  const qFollowUpWindow = searchParams.get("followUpWindow")
-  const qFollowUpStatus = searchParams.get("followUpStatus")
+  const queryFrom = searchParams.get("from")
+  const queryTo = searchParams.get("to")
+  const querySellerId = searchParams.get("sellerId")
+  const queryReferenceAt = searchParams.get("referenceAt")
+  const queryFollowUpWindow = searchParams.get("followUpWindow")
+  const queryFollowUpStatus = searchParams.get("followUpStatus")
 
-  /* ── date state ── */
   const now = new Date()
 
   const [filterMode, setFilterMode] = React.useState<"month" | "range">(
-    qFrom && qTo ? "range" : "month",
+    queryFrom && queryTo ? "range" : "month",
   )
   const [month, setMonth] = React.useState(() => {
-    if (qFrom) return new Date(qFrom + "T12:00:00")
+    if (queryFrom) return new Date(`${queryFrom}T12:00:00`)
     return now
   })
   const [rangeFrom, setRangeFrom] = React.useState<Date | undefined>(
-    qFrom ? new Date(qFrom + "T12:00:00") : undefined,
+    queryFrom ? new Date(`${queryFrom}T12:00:00`) : undefined,
   )
   const [rangeTo, setRangeTo] = React.useState<Date | undefined>(
-    qTo ? new Date(qTo + "T12:00:00") : undefined,
+    queryTo ? new Date(`${queryTo}T12:00:00`) : undefined,
   )
 
   const from =
@@ -164,29 +182,27 @@ export default function FollowUpPage() {
       ? toYMD(startOfMonth(month))
       : rangeFrom
         ? toYMD(rangeFrom)
-        : qFrom ?? toYMD(startOfMonth(now))
+        : queryFrom ?? toYMD(startOfMonth(now))
   const to =
     filterMode === "month"
       ? toYMD(clampToday(endOfMonth(month)))
       : rangeTo
         ? toYMD(rangeTo)
-        : qTo ?? toYMD(clampToday(endOfMonth(now)))
+        : queryTo ?? toYMD(clampToday(endOfMonth(now)))
 
-  /* referenceAt — from query or computed from `to` end-of-day */
-  const referenceAt = qReferenceAt ?? `${to}T23:59:59-03:00`
+  const referenceAt = queryReferenceAt ?? `${to}T23:59:59-03:00`
 
-  /* ── employees ── */
   const [employees, setEmployees] = React.useState<Employee[]>([])
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>(
-    qSellerId ?? "all",
+    querySellerId ?? "all",
   )
 
-  /* ── branches ── */
   const [branches, setBranches] = React.useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
 
   React.useEffect(() => {
     if (!session) return
+
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
       .catch(() => {})
@@ -197,34 +213,35 @@ export default function FollowUpPage() {
 
   const selectedEmployee =
     selectedEmployeeId !== "all"
-      ? employees.find((e) => String(e.id) === selectedEmployeeId)
+      ? employees.find((employee) => String(employee.id) === selectedEmployeeId)
       : undefined
   const sellerId = selectedEmployee
     ? String(selectedEmployee.erpId)
-    : qSellerId ?? undefined
+    : querySellerId ?? undefined
   const branchId = selectedBranchId !== "all" ? selectedBranchId : undefined
 
-  /* ── follow-up filters ── */
   const [followUpWindow, setFollowUpWindow] = React.useState<string>(
-    qFollowUpWindow ?? "all",
+    queryFollowUpWindow ?? "all",
   )
   const [followUpStatus, setFollowUpStatus] = React.useState<string>(
-    qFollowUpStatus ?? "all",
+    queryFollowUpStatus ?? "all",
   )
-
-  /* ── search ── */
   const [search, setSearch] = React.useState("")
 
-  /* ── data fetching ── */
   const [rows, setRows] = React.useState<FollowUpDrilldownRow[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [page, setPage] = React.useState(0)
+  const [sort, setSort] = React.useState<SortState<FollowUpSortColumn>>({
+    column: "date",
+    direction: "desc",
+  })
 
   const fetchKey = React.useRef(0)
 
   React.useEffect(() => {
     if (!session) return
+
     const key = ++fetchKey.current
     setLoading(true)
     setError(null)
@@ -245,43 +262,76 @@ export default function FollowUpPage() {
         if (key !== fetchKey.current) return
         setRows(data.rows)
       })
-      .catch((e: Error) => {
+      .catch((fetchError: Error) => {
         if (key !== fetchKey.current) return
-        setError(e.message)
+        setError(fetchError.message)
       })
       .finally(() => {
         if (key !== fetchKey.current) return
         setLoading(false)
       })
-  }, [session, from, to, referenceAt, sellerId, branchId, followUpWindow, followUpStatus])
+  }, [
+    session,
+    from,
+    to,
+    referenceAt,
+    sellerId,
+    branchId,
+    followUpWindow,
+    followUpStatus,
+  ])
 
-  /* ── client-side search filter ── */
   const filtered = React.useMemo(() => {
     if (!search.trim()) return rows
-    const q = search.toLowerCase()
+
+    const query = search.toLowerCase()
     return rows.filter(
-      (r) =>
-        r.customerName?.toLowerCase().includes(q) ||
-        r.sellerName?.toLowerCase().includes(q) ||
-        r.davId?.toLowerCase().includes(q) ||
-        r.cpfCnpj?.includes(q),
+      (row) =>
+        row.customerName?.toLowerCase().includes(query) ||
+        row.sellerName?.toLowerCase().includes(query) ||
+        row.davId?.toLowerCase().includes(query) ||
+        row.cpfCnpj?.includes(query),
     )
   }, [rows, search])
 
-  /* ── pagination ── */
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const sorted = React.useMemo(
+    () =>
+      sortRows(filtered, sort, {
+        date: (row) => row.budgetDate,
+        customer: (row) => row.customerName,
+        seller: (row) => row.sellerName,
+        budgetStatus: (row) =>
+          BUDGET_STATUS_LABELS[row.statusNormalized]?.label ??
+          row.statusNormalized,
+        window: (row) => (row.followUpWindow === "within24h" ? 0 : 1),
+        followUpStatus: (row) =>
+          FOLLOWUP_STATUS_LABELS[row.followUpStatus]?.label ??
+          row.followUpStatus,
+        channel: (row) => row.channel,
+        branch: (row) => row.branchName,
+        value: (row) => Number(row.valueAmount),
+        dav: (row) => row.davId,
+      }),
+    [filtered, sort],
+  )
 
-  /* ── totals ── */
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const paginated = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
   const totals = React.useMemo(() => {
     return filtered.reduce(
-      (acc, r) => ({
-        count: acc.count + 1,
-        value: acc.value + Number(r.valueAmount),
+      (accumulator, row) => ({
+        count: accumulator.count + 1,
+        value: accumulator.value + Number(row.valueAmount),
       }),
       { count: 0, value: 0 },
     )
   }, [filtered])
+
+  function handleSort(column: FollowUpSortColumn) {
+    setSort((current) => getNextSort(current, column))
+    setPage(0)
+  }
 
   if (!session) return null
 
@@ -299,8 +349,7 @@ export default function FollowUpPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 px-4 md:gap-6 md:py-6 lg:px-6">
-              {/* ── header ── */}
+            <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:py-6 lg:px-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Button
@@ -329,14 +378,12 @@ export default function FollowUpPage() {
                 </div>
               </div>
 
-              {/* ── filters bar ── */}
               <div className="flex flex-wrap items-center gap-2">
-                {/* date mode toggle */}
                 <div className="flex rounded-md border">
                   <Button
                     size="sm"
                     variant={filterMode === "month" ? "default" : "ghost"}
-                    className="rounded-r-none h-8 text-xs"
+                    className="h-8 rounded-r-none text-xs"
                     onClick={() => setFilterMode("month")}
                   >
                     MÊS
@@ -344,7 +391,7 @@ export default function FollowUpPage() {
                   <Button
                     size="sm"
                     variant={filterMode === "range" ? "default" : "ghost"}
-                    className="rounded-l-none h-8 text-xs"
+                    className="h-8 rounded-l-none text-xs"
                     onClick={() => setFilterMode("range")}
                   >
                     RANGE
@@ -359,8 +406,12 @@ export default function FollowUpPage() {
                       className="h-8 w-8"
                       onClick={() =>
                         setMonth(
-                          (p) =>
-                            new Date(p.getFullYear(), p.getMonth() - 1, 1),
+                          (current) =>
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() - 1,
+                              1,
+                            ),
                         )
                       }
                     >
@@ -373,21 +424,23 @@ export default function FollowUpPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      disabled={
-                        isFuture(
-                          startOfMonth(
-                            new Date(
-                              month.getFullYear(),
-                              month.getMonth() + 1,
-                              1,
-                            ),
+                      disabled={isFuture(
+                        startOfMonth(
+                          new Date(
+                            month.getFullYear(),
+                            month.getMonth() + 1,
+                            1,
                           ),
-                        )
-                      }
+                        ),
+                      )}
                       onClick={() =>
                         setMonth(
-                          (p) =>
-                            new Date(p.getFullYear(), p.getMonth() + 1, 1),
+                          (current) =>
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() + 1,
+                              1,
+                            ),
                         )
                       }
                     >
@@ -400,7 +453,7 @@ export default function FollowUpPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 text-xs gap-1"
+                        className="h-8 gap-1 text-xs"
                       >
                         <CalendarIcon className="size-3.5" />
                         {rangeFrom && rangeTo
@@ -417,18 +470,17 @@ export default function FollowUpPage() {
                             ? { from: rangeFrom, to: rangeTo }
                             : undefined
                         }
-                        onSelect={(r) => {
-                          setRangeFrom(r?.from)
-                          setRangeTo(r?.to)
+                        onSelect={(range) => {
+                          setRangeFrom(range?.from)
+                          setRangeTo(range?.to)
                         }}
-                        disabled={(d) => isFuture(d) && !isToday(d)}
+                        disabled={(date) => isFuture(date) && !isToday(date)}
                         numberOfMonths={2}
                       />
                     </PopoverContent>
                   </Popover>
                 )}
 
-                {/* employee/seller filter */}
                 <Select
                   value={selectedEmployeeId}
                   onValueChange={setSelectedEmployeeId}
@@ -438,15 +490,14 @@ export default function FollowUpPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos Vendedores</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.name}
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={String(employee.id)}>
+                        {employee.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* branch filter */}
                 <Select
                   value={selectedBranchId}
                   onValueChange={setSelectedBranchId}
@@ -456,83 +507,150 @@ export default function FollowUpPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas Filiais</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.name}
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={String(branch.id)}>
+                        {branch.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* follow-up window filter */}
-                <Select value={followUpWindow} onValueChange={setFollowUpWindow}>
+                <Select
+                  value={followUpWindow}
+                  onValueChange={setFollowUpWindow}
+                >
                   <SelectTrigger className="h-8 w-[160px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {WINDOW_FILTER_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                    {WINDOW_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* follow-up status filter */}
-                <Select value={followUpStatus} onValueChange={setFollowUpStatus}>
+                <Select
+                  value={followUpStatus}
+                  onValueChange={setFollowUpStatus}
+                >
                   <SelectTrigger className="h-8 w-[180px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_FILTER_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                    {STATUS_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* local search */}
                 <div className="relative ml-auto">
                   <SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Buscar cliente, vendedor..."
                     className="h-8 w-[220px] pl-8 text-xs"
                     value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value)
+                    onChange={(event) => {
+                      setSearch(event.target.value)
                       setPage(0)
                     }}
                   />
                 </div>
               </div>
 
-              {/* ── table ── */}
               <div className="rounded-lg border bg-card">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[100px]">Data</TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead className="w-[100px]">Status Orç.</TableHead>
-                        <TableHead className="w-[80px]">Janela</TableHead>
-                        <TableHead className="w-[120px]">Follow-up</TableHead>
-                        <TableHead>Canal</TableHead>
-                        <TableHead>Filial</TableHead>
-                        <TableHead className="text-right w-[130px]">
+                        <SortableTableHead
+                          column="date"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[100px]"
+                        >
+                          Data
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="customer"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Cliente
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="seller"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Vendedor
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="budgetStatus"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[100px]"
+                        >
+                          Status Orç.
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="window"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[80px]"
+                        >
+                          Janela
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="followUpStatus"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[120px]"
+                        >
+                          Follow-up
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="channel"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Canal
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="branch"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Filial
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="value"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[130px] text-right"
+                          align="right"
+                        >
                           Valor
-                        </TableHead>
-                        <TableHead className="w-[90px]">DAV</TableHead>
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="dav"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[90px]"
+                        >
+                          DAV
+                        </SortableTableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {loading &&
-                        Array.from({ length: 10 }).map((_, i) => (
-                          <TableRow key={i}>
-                            {Array.from({ length: 10 }).map((_, j) => (
-                              <TableCell key={j}>
+                        Array.from({ length: 10 }).map((_, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            {Array.from({ length: 10 }).map((_, cellIndex) => (
+                              <TableCell key={cellIndex}>
                                 <Skeleton className="h-4 w-full" />
                               </TableCell>
                             ))}
@@ -543,7 +661,7 @@ export default function FollowUpPage() {
                         <TableRow>
                           <TableCell
                             colSpan={10}
-                            className="text-center text-destructive py-8"
+                            className="py-8 text-center text-destructive"
                           >
                             {error}
                           </TableCell>
@@ -554,7 +672,7 @@ export default function FollowUpPage() {
                         <TableRow>
                           <TableCell
                             colSpan={10}
-                            className="text-center text-muted-foreground py-8"
+                            className="py-8 text-center text-muted-foreground"
                           >
                             Nenhum registro de follow-up encontrado no período
                           </TableCell>
@@ -563,17 +681,20 @@ export default function FollowUpPage() {
 
                       {!loading &&
                         paginated.map((row) => {
-                          const bst = BUDGET_STATUS_LABELS[row.statusNormalized] ?? {
-                            label: row.statusNormalized,
-                            variant: "outline" as const,
-                          }
-                          const fst = FOLLOWUP_STATUS_LABELS[row.followUpStatus] ?? {
-                            label: row.followUpStatus,
-                            variant: "outline" as const,
-                          }
+                          const budgetStatus =
+                            BUDGET_STATUS_LABELS[row.statusNormalized] ?? {
+                              label: row.statusNormalized,
+                              variant: "outline" as const,
+                            }
+                          const followUpStatusConfig =
+                            FOLLOWUP_STATUS_LABELS[row.followUpStatus] ?? {
+                              label: row.followUpStatus,
+                              variant: "outline" as const,
+                            }
+
                           return (
                             <TableRow key={row.id}>
-                              <TableCell className="tabular-nums text-xs">
+                              <TableCell className="text-xs tabular-nums">
                                 {formatDate(row.budgetDate)}
                               </TableCell>
                               <TableCell
@@ -586,16 +707,23 @@ export default function FollowUpPage() {
                                 {row.sellerName}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={bst.variant} className="text-xs">
-                                  {bst.label}
+                                <Badge
+                                  variant={budgetStatus.variant}
+                                  className="text-xs"
+                                >
+                                  {budgetStatus.label}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-xs">
-                                {FOLLOWUP_WINDOW_LABELS[row.followUpWindow] ?? row.followUpWindow}
+                                {FOLLOWUP_WINDOW_LABELS[row.followUpWindow] ??
+                                  row.followUpWindow}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={fst.variant} className="text-xs">
-                                  {fst.label}
+                                <Badge
+                                  variant={followUpStatusConfig.variant}
+                                  className="text-xs"
+                                >
+                                  {followUpStatusConfig.label}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-xs">
@@ -604,10 +732,10 @@ export default function FollowUpPage() {
                               <TableCell className="text-xs">
                                 {row.branchName}
                               </TableCell>
-                              <TableCell className="text-right tabular-nums text-xs font-medium">
+                              <TableCell className="text-right text-xs font-medium tabular-nums">
                                 {formatCurrency(Number(row.valueAmount))}
                               </TableCell>
-                              <TableCell className="tabular-nums text-xs">
+                              <TableCell className="text-xs tabular-nums">
                                 {row.davId ?? "—"}
                               </TableCell>
                             </TableRow>
@@ -617,12 +745,11 @@ export default function FollowUpPage() {
                   </Table>
                 </div>
 
-                {/* ── pagination ── */}
-                {!loading && filtered.length > PAGE_SIZE && (
+                {!loading && sorted.length > PAGE_SIZE && (
                   <div className="flex items-center justify-between border-t px-4 py-3">
                     <span className="text-xs text-muted-foreground">
                       Página {page + 1} de {totalPages} ·{" "}
-                      {formatNumber(filtered.length)} registros
+                      {formatNumber(sorted.length)} registros
                     </span>
                     <div className="flex items-center gap-1">
                       <Button
@@ -639,7 +766,7 @@ export default function FollowUpPage() {
                         size="icon"
                         className="h-7 w-7"
                         disabled={page === 0}
-                        onClick={() => setPage((p) => p - 1)}
+                        onClick={() => setPage((current) => current - 1)}
                       >
                         <ChevronLeftIcon className="size-3.5" />
                       </Button>
@@ -648,7 +775,7 @@ export default function FollowUpPage() {
                         size="icon"
                         className="h-7 w-7"
                         disabled={page >= totalPages - 1}
-                        onClick={() => setPage((p) => p + 1)}
+                        onClick={() => setPage((current) => current + 1)}
                       >
                         <ChevronRightIcon className="size-3.5" />
                       </Button>

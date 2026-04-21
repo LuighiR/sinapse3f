@@ -288,6 +288,172 @@ Response `200`:
 ]
 ```
 
+## Tenant Users
+
+### Access Rules
+
+Administracao de usuarios por tenant segue estas regras:
+
+- exige `Authorization: Bearer <jwt>`
+- exige `X-Tenant-Id: <tenant-id>`
+- usa sempre o tenant ativo do header
+- permite acesso apenas para memberships `OWNER` e `ADMIN`
+
+### `GET /tenant-users`
+
+Descricao:
+lista os usuarios vinculados ao tenant ativo, incluindo status do usuario e status da membership naquele tenant.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Response `200`:
+
+```json
+[
+  {
+    "id": "u-admin",
+    "email": "admin@example.com",
+    "name": "Admin",
+    "isActive": true,
+    "role": "ADMIN",
+    "membershipIsActive": true
+  },
+  {
+    "id": "u-viewer",
+    "email": "viewer@example.com",
+    "name": "Viewer",
+    "isActive": true,
+    "role": "VIEWER",
+    "membershipIsActive": true
+  }
+]
+```
+
+Response `403`:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Tenant user administration requires owner or admin membership"
+}
+```
+
+### `POST /tenant-users`
+
+Descricao:
+cria um novo usuario no tenant ativo ou reaproveita um usuario existente pelo email, atualizando senha e reativando a membership do tenant atual.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Request body:
+
+```json
+{
+  "email": "new.user@example.com",
+  "name": "New User",
+  "password": "secret-123",
+  "role": "VIEWER"
+}
+```
+
+Campos:
+
+- `email` required
+- `password` required
+- `role` required: `OWNER`, `ADMIN`, `MANAGER`, `VIEWER`
+- `name` optional
+- `isActive` optional, default `true`
+
+Response `201`:
+
+```json
+{
+  "id": "9b2f7c7c-fb55-4f4e-88e8-d1b9867f1111",
+  "email": "new.user@example.com",
+  "name": "New User",
+  "isActive": true,
+  "role": "VIEWER",
+  "membershipIsActive": true
+}
+```
+
+Response `400`:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid tenant user payload"
+}
+```
+
+### `PATCH /tenant-users/:userId`
+
+Descricao:
+atualiza o usuario e a membership do tenant ativo para o `userId` informado.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Path Params:
+
+- `userId` required
+
+Request body:
+
+```json
+{
+  "name": "Viewer Updated",
+  "password": "after-123",
+  "role": "MANAGER",
+  "isActive": true,
+  "membershipIsActive": false
+}
+```
+
+Todos os campos do body sao opcionais, mas pelo menos um deles precisa ser enviado:
+
+- `name`
+- `password`
+- `role`
+- `isActive`
+- `membershipIsActive`
+
+Response `200`:
+
+```json
+{
+  "id": "u-viewer",
+  "email": "viewer@example.com",
+  "name": "Viewer Updated",
+  "isActive": true,
+  "role": "MANAGER",
+  "membershipIsActive": false
+}
+```
+
+Response `404`:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Tenant user not found"
+}
+```
+
 ## Companies
 
 ### `GET /companies/current`
@@ -745,6 +911,86 @@ Response `200`:
   ]
 }
 ```
+
+### `POST /kpis/budgets/follow-up/dkw-dispatch`
+
+Descricao:
+dispara para o webhook DKW os orcamentos de follow-up classificados como `after24h` e `open`, sem reenviar registros que ja tenham `raw.ferraco_budgets.sent_dkw_at`.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Ou, para automacao backend-only:
+
+```http
+X-Job-Key: <job-key>
+```
+
+Query Params:
+
+- `slug` optional no modo JWT, required quando usar `X-Job-Key`
+- `from` required: inicio do recorte de aberturas
+- `to` required: fim do recorte de aberturas
+- `referenceAt` required: data e hora de referencia da classificacao
+- `sellerId` optional
+- `branchId` optional
+- `orderType` optional
+
+Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+
+Regra:
+
+- o endpoint reutiliza a mesma classificacao de follow-up dos endpoints `summary`, `daily` e `drilldown`
+- somente orcamentos classificados como `after24h` e `open` entram no disparo
+- o estado de envio fica em `raw.ferraco_budgets.sent_dkw_at`
+- se `sent_dkw_at` ja estiver preenchido, o registro e ignorado
+- o destino do webhook prioriza `core.employees.dkw_webhook` para o vendedor da filial; sem valor, a API usa `BUDGET_FOLLOW_UP_DKW_WEBHOOK_URL` como fallback
+- em sucesso no webhook, a API grava `sent_dkw_at`
+- em erro de um item, a API continua; se houver 3 erros seguidos, a execucao aborta
+- o payload usa `cell_phone`, fallback `phone`, fallback final `Sem registro`
+- quando nao houver telefone em nenhum dos dois campos, a API tambem envia `mensagem = "Sem telefone registrado"`
+- o payload enviado ao DKW formata `valor_orcamento` como moeda BRL (`R$ 0,00`) e `data_hora_abertura` como `dd/MM/yyyy`
+- `referenceAt` aceita timestamp com offset (`-03:00`) ou, nas formas sem offset que o backend normaliza (`YYYY-MM-DDTHH:mm` ou `YYYY-MM-DDTHH:mm:ss`, com `T` ou espaco), a API assume `America/Sao_Paulo` (`UTC-3`)
+- `referenceAt` tambem aceita `YYYY-MM-DD`; nesse caso, a API interpreta o valor como o fim do dia em `America/Sao_Paulo` (`23:59:59.999`)
+
+Exemplo:
+
+```text
+POST /kpis/budgets/follow-up/dkw-dispatch?from=2026-04-01&to=2026-04-02&referenceAt=2026-04-02T10:00:00-03:00&sellerId=7&branchId=5&orderType=Balcao
+```
+
+Exemplo com automacao:
+
+```text
+POST /kpis/budgets/follow-up/dkw-dispatch?slug=ferracosul-kpi-dev&from=2026-04-01&to=2026-04-08&referenceAt=2026-04-08T16:00:00-03:00
+```
+
+Response `200`:
+
+```json
+{
+  "period": {
+    "from": "2026-04-01",
+    "to": "2026-04-02",
+    "key": "2026-04-01_2026-04-02"
+  },
+  "referenceAt": "2026-04-02T10:00:00-03:00",
+  "status": "completed"
+}
+```
+
+Status HTTP:
+
+- `200` quando o dispatch conclui o processamento do lote
+- `400` para query params invalidos
+- `401` para JWT invalido ou ausente, ou `X-Job-Key` invalida
+- `403` quando `branchId` nao pertence ao escopo da empresa no modo autenticado por usuario
+- `404` para `slug` inexistente ou tenant inativo no modo `X-Job-Key`
+- `409` para tenant sem `backendClientId` ou com backend client inativo no modo `X-Job-Key`
 
 ### `GET /kpis/budgets/hourly`
 
@@ -1355,6 +1601,126 @@ Response `200`:
 }
 ```
 
+## Internal Jobs
+
+### `POST /internal/jobs/kpis/refresh`
+
+Descricao:
+endpoint interno para automacao backend-only que aceita um refresh assíncrono com suporte atual de `budgets`, `sales` e `calls` para um unico tenant resolvido por `slug`.
+
+Este endpoint:
+
+- e destinado a cron, scheduler ou automacao de servidor
+- nao usa JWT
+- nao exige `Authorization`
+- nao exige `X-Tenant-Id`
+- exige `X-Job-Key`
+- resolve o `clientId` real via `tenant.backendClientId`
+- persiste um `refresh_job` e responde sem esperar a execucao terminar
+
+Headers:
+
+- `X-Job-Key` required
+
+Query Params:
+
+- `slug` required
+- `from` required
+- `to` required
+
+Response `202`:
+
+```json
+{
+  "status": "accepted",
+  "message": "task initiated",
+  "jobId": "41"
+}
+```
+
+Status HTTP:
+
+- `202` quando a requisicao foi autenticada, o tenant foi resolvido e o job foi persistido para execucao em background
+- `400` para query params invalidos
+- `401` para `X-Job-Key` ausente ou invalido
+- `404` para `slug` inexistente ou tenant inativo
+- `409` para tenant sem `backendClientId` ou com backend client inativo
+
+### `GET /internal/jobs/kpis/refresh/:jobId`
+
+Descricao:
+consulta o status persistido de um `refresh_job` aceito anteriormente.
+
+Headers:
+
+- `X-Job-Key` required
+
+Path Params:
+
+- `jobId` required
+
+Response `200`:
+
+```json
+{
+  "jobId": "41",
+  "status": "PARTIAL_SUCCESS",
+  "slug": "ferracosul-kpi-dev",
+  "tenantId": "tenant-1",
+  "clientId": "ferracosul",
+  "from": "2026-04-01",
+  "to": "2026-04-06",
+  "triggerType": "api",
+  "requestedAt": "2026-04-08T12:00:00.000Z",
+  "startedAt": "2026-04-08T12:00:01.000Z",
+  "finishedAt": "2026-04-08T12:00:09.000Z",
+  "errorMessage": "sales: Sale refresh failed",
+  "results": {
+    "overallStatus": "partial_success",
+    "results": [
+      {
+        "job": "budgets",
+        "status": "success",
+        "startedAt": "2026-04-08T12:00:01.000Z",
+        "finishedAt": "2026-04-08T12:00:03.000Z"
+      },
+      {
+        "job": "sales",
+        "status": "failed",
+        "startedAt": "2026-04-08T12:00:03.000Z",
+        "finishedAt": "2026-04-08T12:00:05.000Z",
+        "error": "Sale refresh failed"
+      },
+      {
+        "job": "calls",
+        "status": "success",
+        "startedAt": "2026-04-08T12:00:05.000Z",
+        "finishedAt": "2026-04-08T12:00:09.000Z"
+      }
+    ]
+  }
+}
+```
+
+Observacoes:
+
+- `results` fica `null` enquanto o job estiver em `PENDING` ou `RUNNING`
+- este fluxo permanece backend-only e nao usa JWT
+- o contrato HTTP permite migrar a execucao em memoria para fila ou worker depois sem quebrar a API
+
+Semantica de status:
+
+- `SUCCESS`: os tres refreshs completaram com sucesso
+- `PARTIAL_SUCCESS`: pelo menos um refresh teve sucesso e pelo menos um falhou
+- `FAILED`: todos os refreshs falharam
+
+Status HTTP:
+
+- `200` quando o job existe e o status foi lido
+- `400` para `jobId` invalido
+- `401` para `X-Job-Key` ausente ou invalido
+- `404` para `jobId` inexistente
+
 ## WhatsApp KPI
 
 ### Filters
@@ -1694,6 +2060,34 @@ curl -X POST "http://localhost:3000/auth/login" ^
 curl -X POST "http://localhost:3000/auth/refresh" ^
   -H "Content-Type: application/json" ^
   -d "{\"refreshToken\":\"<refresh-token>\"}"
+```
+
+### Tenant Users List
+
+```bash
+curl -X GET "http://localhost:3000/tenant-users" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
+```
+
+### Tenant Users Create
+
+```bash
+curl -X POST "http://localhost:3000/tenant-users" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"email\":\"new.user@example.com\",\"name\":\"New User\",\"password\":\"secret-123\",\"role\":\"VIEWER\"}"
+```
+
+### Tenant Users Update
+
+```bash
+curl -X PATCH "http://localhost:3000/tenant-users/u-viewer" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"Viewer Updated\",\"password\":\"after-123\",\"role\":\"MANAGER\",\"isActive\":true,\"membershipIsActive\":false}"
 ```
 
 ### Budget Summary

@@ -15,15 +15,17 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import {
-  LayoutDashboardIcon,
-  FileSpreadsheetIcon,
-  ShoppingCartIcon,
-  ClockIcon,
-  Settings2Icon,
-  CircleHelpIcon,
   BrainCircuitIcon,
+  CircleHelpIcon,
+  ClockIcon,
+  FileSpreadsheetIcon,
+  LayoutDashboardIcon,
+  Settings2Icon,
+  ShoppingCartIcon,
 } from "lucide-react"
+
 import { useAuth } from "@/lib/auth-context"
+import { canManageTenantUsers } from "@/lib/tenant-permissions"
 
 const navMain = [
   {
@@ -48,27 +50,32 @@ const navMain = [
   },
 ]
 
-const navSecondary = [
-  {
-    title: "Configurações",
-    url: "#",
-    icon: <Settings2Icon />,
-  },
-  {
-    title: "Ajuda",
-    url: "#",
-    icon: <CircleHelpIcon />,
-  },
-]
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { session } = useAuth()
+  const canManageUsers = canManageTenantUsers(session?.tenantRole)
 
   const user = {
     name: session?.user.name ?? "Usuário",
     email: session?.user.email ?? "",
     avatar: "",
   }
+
+  const navSecondary = [
+    ...(canManageUsers
+      ? [
+          {
+            title: "Configurações",
+            url: "/dashboard/configuracoes",
+            icon: <Settings2Icon />,
+          },
+        ]
+      : []),
+    {
+      title: "Ajuda",
+      url: "#",
+      icon: <CircleHelpIcon />,
+    },
+  ]
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>

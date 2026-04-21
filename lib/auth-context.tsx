@@ -10,6 +10,7 @@ interface Session {
   user: { id: string; email: string; name: string }
   tenantId: string
   tenantName: string
+  tenantRole: string
   expiresAt: number
 }
 
@@ -37,7 +38,7 @@ function loadSession(): Session | null {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const session = JSON.parse(raw) as Session
-    if (!session.expiresAt || Date.now() >= session.expiresAt) {
+    if (!session.expiresAt || Date.now() >= session.expiresAt || !session.tenantRole) {
       sessionStorage.removeItem(STORAGE_KEY)
       return null
     }

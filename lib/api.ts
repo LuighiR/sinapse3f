@@ -83,6 +83,66 @@ export function refreshTokens(refreshToken: string) {
   })
 }
 
+// -- Tenant users --
+
+export type TenantUserRole = "OWNER" | "ADMIN" | "MANAGER" | "VIEWER"
+
+export interface TenantUser {
+  id: string
+  email: string
+  name: string | null
+  isActive: boolean
+  role: TenantUserRole
+  membershipIsActive: boolean
+}
+
+export interface CreateTenantUserInput {
+  email: string
+  password: string
+  role: TenantUserRole
+  name?: string
+  isActive?: boolean
+}
+
+export interface UpdateTenantUserInput {
+  name?: string
+  password?: string
+  role?: TenantUserRole
+  isActive?: boolean
+  membershipIsActive?: boolean
+}
+
+export function getTenantUsers(opts: { token: string; tenantId: string }) {
+  return api<TenantUser[]>("/tenant-users", {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
+
+export function createTenantUser(
+  opts: { token: string; tenantId: string } & CreateTenantUserInput,
+) {
+  const { token, tenantId, ...body } = opts
+  return api<TenantUser>("/tenant-users", {
+    method: "POST",
+    token,
+    tenantId,
+    body: JSON.stringify(body),
+  })
+}
+
+export function updateTenantUser(
+  opts: { token: string; tenantId: string; userId: string } & UpdateTenantUserInput,
+) {
+  const { token, tenantId, userId, ...body } = opts
+  return api<TenantUser>(`/tenant-users/${userId}`, {
+    method: "PATCH",
+    token,
+    tenantId,
+    body: JSON.stringify(body),
+  })
+}
+
 // ── Company ──
 
 export interface Branch {

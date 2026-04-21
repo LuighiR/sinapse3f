@@ -3,38 +3,49 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
-  format,
-  startOfMonth,
   endOfMonth,
+  format,
   isFuture,
   isToday,
+  startOfMonth,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
+  ArrowLeftIcon,
+  CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CalendarIcon,
-  ArrowLeftIcon,
-  SearchIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  SearchIcon,
 } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+
 import {
-  getSalesDrilldown,
-  getEmployees,
   getBranches,
-  type SalesDrilldownRow,
-  type Employee,
+  getEmployees,
+  getSalesDrilldown,
   type Branch,
+  type Employee,
+  type SalesDrilldownRow,
 } from "@/lib/api"
+import {
+  getNextSort,
+  sortRows,
+  type SortState,
+} from "@/lib/table-sorting"
+import { useAuth } from "@/lib/auth-context"
 import { AppSidebar } from "@/components/app-sidebar"
+import { SortableTableHead } from "@/components/sortable-table-head"
 import { SiteHeader } from "@/components/site-header"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -42,30 +53,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
+import { Skeleton } from "@/components/ui/skeleton"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
 
-/* ── helpers ── */
-
-function toYMD(d: Date) {
-  return format(d, "yyyy-MM-dd")
+function toYMD(date: Date) {
+  return format(date, "yyyy-MM-dd")
 }
 
-function clampToday(d: Date) {
+function clampToday(date: Date) {
   const now = new Date()
-  return d > now ? now : d
+  return date > now ? now : date
 }
 
 function formatCurrency(value: number) {
@@ -81,11 +85,17 @@ function formatNumber(value: number) {
 }
 
 function formatDate(iso: string) {
-  const [y, m, d] = iso.split("-")
-  return `${d}/${m}/${y}`
+  const [year, month, day] = iso.split("-")
+  return `${day}/${month}/${year}`
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const STATUS_LABELS: Record<
+  string,
+  {
+    label: string
+    variant: "default" | "secondary" | "destructive" | "outline"
+  }
+> = {
   ACTIVE: { label: "Ativa", variant: "default" },
   CANCELED: { label: "Cancelada", variant: "destructive" },
 }
@@ -98,7 +108,17 @@ const STATUS_FILTER_OPTIONS = [
 
 const PAGE_SIZE = 25
 
-/* ── main page ── */
+type SalesSortColumn =
+  | "date"
+  | "customer"
+  | "seller"
+  | "status"
+  | "channel"
+  | "budget"
+  | "branch"
+  | "value"
+  | "invoice"
+  | "sequential"
 
 export default function VendasPage() {
   const { session } = useAuth()
@@ -109,30 +129,28 @@ export default function VendasPage() {
     if (!session) router.replace("/login")
   }, [session, router])
 
-  /* ── read query params (from KPI drilldown navigation) ── */
-  const qFrom = searchParams.get("from")
-  const qTo = searchParams.get("to")
-  const qSellerId = searchParams.get("sellerId")
-  const qStatus = searchParams.get("status")
-  const qHasLinkedBudget = searchParams.get("hasLinkedBudget")
+  const queryFrom = searchParams.get("from")
+  const queryTo = searchParams.get("to")
+  const querySellerId = searchParams.get("sellerId")
+  const queryStatus = searchParams.get("status")
+  const queryHasLinkedBudget = searchParams.get("hasLinkedBudget")
 
-  /* ── date state ── */
   const now = new Date()
-  const defaultFrom = qFrom ?? toYMD(startOfMonth(now))
-  const defaultTo = qTo ?? toYMD(clampToday(endOfMonth(now)))
+  const defaultFrom = queryFrom ?? toYMD(startOfMonth(now))
+  const defaultTo = queryTo ?? toYMD(clampToday(endOfMonth(now)))
 
   const [filterMode, setFilterMode] = React.useState<"month" | "range">(
-    qFrom && qTo ? "range" : "month",
+    queryFrom && queryTo ? "range" : "month",
   )
   const [month, setMonth] = React.useState(() => {
-    if (qFrom) return new Date(qFrom + "T12:00:00")
+    if (queryFrom) return new Date(`${queryFrom}T12:00:00`)
     return now
   })
   const [rangeFrom, setRangeFrom] = React.useState<Date | undefined>(
-    qFrom ? new Date(qFrom + "T12:00:00") : undefined,
+    queryFrom ? new Date(`${queryFrom}T12:00:00`) : undefined,
   )
   const [rangeTo, setRangeTo] = React.useState<Date | undefined>(
-    qTo ? new Date(qTo + "T12:00:00") : undefined,
+    queryTo ? new Date(`${queryTo}T12:00:00`) : undefined,
   )
 
   const from =
@@ -148,18 +166,17 @@ export default function VendasPage() {
         ? toYMD(rangeTo)
         : defaultTo
 
-  /* ── employees ── */
   const [employees, setEmployees] = React.useState<Employee[]>([])
   const [selectedEmployeeId, setSelectedEmployeeId] = React.useState<string>(
-    qSellerId ?? "all",
+    querySellerId ?? "all",
   )
 
-  /* ── branches ── */
   const [branches, setBranches] = React.useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
 
   React.useEffect(() => {
     if (!session) return
+
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
       .catch(() => {})
@@ -170,34 +187,33 @@ export default function VendasPage() {
 
   const selectedEmployee =
     selectedEmployeeId !== "all"
-      ? employees.find((e) => String(e.id) === selectedEmployeeId)
+      ? employees.find((employee) => String(employee.id) === selectedEmployeeId)
       : undefined
   const sellerId = selectedEmployee
     ? String(selectedEmployee.erpId)
-    : qSellerId ?? undefined
+    : querySellerId ?? undefined
   const branchId = selectedBranchId !== "all" ? selectedBranchId : undefined
 
-  /* ── status filter ── */
-  const [status, setStatus] = React.useState<string>(qStatus ?? "all")
-
-  /* ── hasLinkedBudget filter ── */
+  const [status, setStatus] = React.useState<string>(queryStatus ?? "all")
   const [hasLinkedBudget, setHasLinkedBudget] = React.useState<string>(
-    qHasLinkedBudget ?? "all",
+    queryHasLinkedBudget ?? "all",
   )
-
-  /* ── search ── */
   const [search, setSearch] = React.useState("")
 
-  /* ── data fetching ── */
   const [rows, setRows] = React.useState<SalesDrilldownRow[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [page, setPage] = React.useState(0)
+  const [sort, setSort] = React.useState<SortState<SalesSortColumn>>({
+    column: "date",
+    direction: "desc",
+  })
 
   const fetchKey = React.useRef(0)
 
   React.useEffect(() => {
     if (!session) return
+
     const key = ++fetchKey.current
     setLoading(true)
     setError(null)
@@ -211,15 +227,16 @@ export default function VendasPage() {
       sellerId,
       branchId,
       status: status !== "all" ? status : undefined,
-      hasLinkedBudget: hasLinkedBudget !== "all" ? hasLinkedBudget : undefined,
+      hasLinkedBudget:
+        hasLinkedBudget !== "all" ? hasLinkedBudget : undefined,
     })
       .then((data) => {
         if (key !== fetchKey.current) return
         setRows(data.rows)
       })
-      .catch((e: Error) => {
+      .catch((fetchError: Error) => {
         if (key !== fetchKey.current) return
-        setError(e.message)
+        setError(fetchError.message)
       })
       .finally(() => {
         if (key !== fetchKey.current) return
@@ -227,33 +244,57 @@ export default function VendasPage() {
       })
   }, [session, from, to, sellerId, branchId, status, hasLinkedBudget])
 
-  /* ── client-side search filter ── */
   const filtered = React.useMemo(() => {
     if (!search.trim()) return rows
-    const q = search.toLowerCase()
+
+    const query = search.toLowerCase()
     return rows.filter(
-      (r) =>
-        r.customerName?.toLowerCase().includes(q) ||
-        r.sellerName?.toLowerCase().includes(q) ||
-        r.sequential?.toLowerCase().includes(q) ||
-        r.cpfCnpj?.includes(q),
+      (row) =>
+        row.customerName?.toLowerCase().includes(query) ||
+        row.sellerName?.toLowerCase().includes(query) ||
+        row.sequential?.toLowerCase().includes(query) ||
+        row.cpfCnpj?.includes(query),
     )
   }, [rows, search])
 
-  /* ── pagination ── */
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const sorted = React.useMemo(
+    () =>
+      sortRows(filtered, sort, {
+        date: (row) => row.saleDate,
+        customer: (row) => row.customerName,
+        seller: (row) => row.sellerName,
+        status: (row) =>
+          STATUS_LABELS[row.statusNormalized]?.label ?? row.statusNormalized,
+        channel: (row) => row.channel,
+        budget: (row) => Number(row.hasLinkedBudget),
+        branch: (row) => row.branchName,
+        value: (row) => Number(row.valueAmount),
+        invoice: (row) =>
+          row.invoiceSerie && row.invoiceNumeric
+            ? `${row.invoiceSerie}-${row.invoiceNumeric}`
+            : null,
+        sequential: (row) => row.sequential,
+      }),
+    [filtered, sort],
+  )
 
-  /* ── totals ── */
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const paginated = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
   const totals = React.useMemo(() => {
     return filtered.reduce(
-      (acc, r) => ({
-        count: acc.count + 1,
-        value: acc.value + Number(r.valueAmount),
+      (accumulator, row) => ({
+        count: accumulator.count + 1,
+        value: accumulator.value + Number(row.valueAmount),
       }),
       { count: 0, value: 0 },
     )
   }, [filtered])
+
+  function handleSort(column: SalesSortColumn) {
+    setSort((current) => getNextSort(current, column))
+    setPage(0)
+  }
 
   if (!session) return null
 
@@ -271,8 +312,7 @@ export default function VendasPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 px-4 md:gap-6 md:py-6 lg:px-6">
-              {/* ── header ── */}
+            <div className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:py-6 lg:px-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Button
@@ -301,14 +341,12 @@ export default function VendasPage() {
                 </div>
               </div>
 
-              {/* ── filters bar ── */}
               <div className="flex flex-wrap items-center gap-2">
-                {/* date mode toggle */}
                 <div className="flex rounded-md border">
                   <Button
                     size="sm"
                     variant={filterMode === "month" ? "default" : "ghost"}
-                    className="rounded-r-none h-8 text-xs"
+                    className="h-8 rounded-r-none text-xs"
                     onClick={() => setFilterMode("month")}
                   >
                     MÊS
@@ -316,7 +354,7 @@ export default function VendasPage() {
                   <Button
                     size="sm"
                     variant={filterMode === "range" ? "default" : "ghost"}
-                    className="rounded-l-none h-8 text-xs"
+                    className="h-8 rounded-l-none text-xs"
                     onClick={() => setFilterMode("range")}
                   >
                     RANGE
@@ -331,8 +369,12 @@ export default function VendasPage() {
                       className="h-8 w-8"
                       onClick={() =>
                         setMonth(
-                          (p) =>
-                            new Date(p.getFullYear(), p.getMonth() - 1, 1),
+                          (current) =>
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() - 1,
+                              1,
+                            ),
                         )
                       }
                     >
@@ -345,21 +387,23 @@ export default function VendasPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      disabled={
-                        isFuture(
-                          startOfMonth(
-                            new Date(
-                              month.getFullYear(),
-                              month.getMonth() + 1,
-                              1,
-                            ),
+                      disabled={isFuture(
+                        startOfMonth(
+                          new Date(
+                            month.getFullYear(),
+                            month.getMonth() + 1,
+                            1,
                           ),
-                        )
-                      }
+                        ),
+                      )}
                       onClick={() =>
                         setMonth(
-                          (p) =>
-                            new Date(p.getFullYear(), p.getMonth() + 1, 1),
+                          (current) =>
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() + 1,
+                              1,
+                            ),
                         )
                       }
                     >
@@ -372,7 +416,7 @@ export default function VendasPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-8 text-xs gap-1"
+                        className="h-8 gap-1 text-xs"
                       >
                         <CalendarIcon className="size-3.5" />
                         {rangeFrom && rangeTo
@@ -389,20 +433,17 @@ export default function VendasPage() {
                             ? { from: rangeFrom, to: rangeTo }
                             : undefined
                         }
-                        onSelect={(r) => {
-                          setRangeFrom(r?.from)
-                          setRangeTo(r?.to)
+                        onSelect={(range) => {
+                          setRangeFrom(range?.from)
+                          setRangeTo(range?.to)
                         }}
-                        disabled={(d) =>
-                          isFuture(d) && !isToday(d)
-                        }
+                        disabled={(date) => isFuture(date) && !isToday(date)}
                         numberOfMonths={2}
                       />
                     </PopoverContent>
                   </Popover>
                 )}
 
-                {/* employee/seller filter */}
                 <Select
                   value={selectedEmployeeId}
                   onValueChange={setSelectedEmployeeId}
@@ -412,15 +453,14 @@ export default function VendasPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos Vendedores</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.name}
+                    {employees.map((employee) => (
+                      <SelectItem key={employee.id} value={String(employee.id)}>
+                        {employee.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* branch filter */}
                 <Select
                   value={selectedBranchId}
                   onValueChange={setSelectedBranchId}
@@ -430,30 +470,31 @@ export default function VendasPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas Filiais</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.name}
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={String(branch.id)}>
+                        {branch.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* status filter */}
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger className="h-8 w-[180px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_FILTER_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                    {STATUS_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
 
-                {/* hasLinkedBudget filter */}
-                <Select value={hasLinkedBudget} onValueChange={setHasLinkedBudget}>
+                <Select
+                  value={hasLinkedBudget}
+                  onValueChange={setHasLinkedBudget}
+                >
                   <SelectTrigger className="h-8 w-[180px] text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -464,47 +505,110 @@ export default function VendasPage() {
                   </SelectContent>
                 </Select>
 
-                {/* local search */}
                 <div className="relative ml-auto">
                   <SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Buscar cliente, vendedor..."
                     className="h-8 w-[220px] pl-8 text-xs"
                     value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value)
+                    onChange={(event) => {
+                      setSearch(event.target.value)
                       setPage(0)
                     }}
                   />
                 </div>
               </div>
 
-              {/* ── table ── */}
               <div className="rounded-lg border bg-card">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[100px]">Data</TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead className="w-[100px]">Status</TableHead>
-                        <TableHead>Canal</TableHead>
-                        <TableHead className="w-[100px]">Orçamento</TableHead>
-                        <TableHead>Filial</TableHead>
-                        <TableHead className="text-right w-[130px]">
+                        <SortableTableHead
+                          column="date"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[100px]"
+                        >
+                          Data
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="customer"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Cliente
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="seller"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Vendedor
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="status"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[100px]"
+                        >
+                          Status
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="channel"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Canal
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="budget"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[100px]"
+                        >
+                          Orçamento
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="branch"
+                          sort={sort}
+                          onToggle={handleSort}
+                        >
+                          Filial
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="value"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[130px] text-right"
+                          align="right"
+                        >
                           Valor
-                        </TableHead>
-                        <TableHead className="w-[90px]">NF</TableHead>
-                        <TableHead className="w-[80px]">Seq.</TableHead>
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="invoice"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[90px]"
+                        >
+                          NF
+                        </SortableTableHead>
+                        <SortableTableHead
+                          column="sequential"
+                          sort={sort}
+                          onToggle={handleSort}
+                          className="w-[80px]"
+                        >
+                          Seq.
+                        </SortableTableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {loading &&
-                        Array.from({ length: 10 }).map((_, i) => (
-                          <TableRow key={i}>
-                            {Array.from({ length: 10 }).map((_, j) => (
-                              <TableCell key={j}>
+                        Array.from({ length: 10 }).map((_, rowIndex) => (
+                          <TableRow key={rowIndex}>
+                            {Array.from({ length: 10 }).map((_, cellIndex) => (
+                              <TableCell key={cellIndex}>
                                 <Skeleton className="h-4 w-full" />
                               </TableCell>
                             ))}
@@ -515,7 +619,7 @@ export default function VendasPage() {
                         <TableRow>
                           <TableCell
                             colSpan={10}
-                            className="text-center text-destructive py-8"
+                            className="py-8 text-center text-destructive"
                           >
                             {error}
                           </TableCell>
@@ -526,7 +630,7 @@ export default function VendasPage() {
                         <TableRow>
                           <TableCell
                             colSpan={10}
-                            className="text-center text-muted-foreground py-8"
+                            className="py-8 text-center text-muted-foreground"
                           >
                             Nenhuma venda encontrada no período
                           </TableCell>
@@ -535,17 +639,18 @@ export default function VendasPage() {
 
                       {!loading &&
                         paginated.map((row) => {
-                          const st = STATUS_LABELS[row.statusNormalized] ?? {
+                          const statusConfig = STATUS_LABELS[row.statusNormalized] ?? {
                             label: row.statusNormalized,
                             variant: "outline" as const,
                           }
-                          const nf =
+                          const invoice =
                             row.invoiceSerie && row.invoiceNumeric
                               ? `${row.invoiceSerie}-${row.invoiceNumeric}`
                               : "—"
+
                           return (
                             <TableRow key={row.id}>
-                              <TableCell className="tabular-nums text-xs">
+                              <TableCell className="text-xs tabular-nums">
                                 {formatDate(row.saleDate)}
                               </TableCell>
                               <TableCell
@@ -558,8 +663,11 @@ export default function VendasPage() {
                                 {row.sellerName}
                               </TableCell>
                               <TableCell>
-                                <Badge variant={st.variant} className="text-xs">
-                                  {st.label}
+                                <Badge
+                                  variant={statusConfig.variant}
+                                  className="text-xs"
+                                >
+                                  {statusConfig.label}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-xs">
@@ -567,21 +675,25 @@ export default function VendasPage() {
                               </TableCell>
                               <TableCell className="text-xs">
                                 {row.hasLinkedBudget ? (
-                                  <Badge variant="secondary" className="text-xs">Sim</Badge>
+                                  <Badge variant="secondary" className="text-xs">
+                                    Sim
+                                  </Badge>
                                 ) : (
-                                  <span className="text-muted-foreground">Não</span>
+                                  <span className="text-muted-foreground">
+                                    Não
+                                  </span>
                                 )}
                               </TableCell>
                               <TableCell className="text-xs">
                                 {row.branchName}
                               </TableCell>
-                              <TableCell className="text-right tabular-nums text-xs font-medium">
+                              <TableCell className="text-right text-xs font-medium tabular-nums">
                                 {formatCurrency(Number(row.valueAmount))}
                               </TableCell>
-                              <TableCell className="tabular-nums text-xs">
-                                {nf}
+                              <TableCell className="text-xs tabular-nums">
+                                {invoice}
                               </TableCell>
-                              <TableCell className="tabular-nums text-xs">
+                              <TableCell className="text-xs tabular-nums">
                                 {row.sequential ?? "—"}
                               </TableCell>
                             </TableRow>
@@ -591,12 +703,11 @@ export default function VendasPage() {
                   </Table>
                 </div>
 
-                {/* ── pagination ── */}
-                {!loading && filtered.length > PAGE_SIZE && (
+                {!loading && sorted.length > PAGE_SIZE && (
                   <div className="flex items-center justify-between border-t px-4 py-3">
                     <span className="text-xs text-muted-foreground">
                       Página {page + 1} de {totalPages} ·{" "}
-                      {formatNumber(filtered.length)} registros
+                      {formatNumber(sorted.length)} registros
                     </span>
                     <div className="flex items-center gap-1">
                       <Button
@@ -613,7 +724,7 @@ export default function VendasPage() {
                         size="icon"
                         className="h-7 w-7"
                         disabled={page === 0}
-                        onClick={() => setPage((p) => p - 1)}
+                        onClick={() => setPage((current) => current - 1)}
                       >
                         <ChevronLeftIcon className="size-3.5" />
                       </Button>
@@ -622,7 +733,7 @@ export default function VendasPage() {
                         size="icon"
                         className="h-7 w-7"
                         disabled={page >= totalPages - 1}
-                        onClick={() => setPage((p) => p + 1)}
+                        onClick={() => setPage((current) => current + 1)}
                       >
                         <ChevronRightIcon className="size-3.5" />
                       </Button>

@@ -59,6 +59,7 @@ export function LoginForm({
         user: res.user,
         tenantId: tenant.id,
         tenantName: tenant.name,
+        tenantRole: tenant.role,
         expiresAt: Date.now() + durationMs,
       })
 
