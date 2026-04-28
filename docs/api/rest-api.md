@@ -1542,6 +1542,21 @@ Response `200`:
 Descricao:
 ranking por atendente quando houver cadastro; caso contrario, o fallback e o ramal.
 
+Query Params:
+
+- `from`
+- `to`
+- `branchId` (opcional)
+- `extensionUuid` (opcional)
+- `extensionNumber` (opcional)
+- `registeredEmployeesOnly` (opcional, boolean): quando `true`, retorna somente linhas `EMPLOYEE`, ou seja, atendentes resolvidos pelo cadastro em `core.employees`; linhas fallback `EXTENSION` sao omitidas.
+
+Exemplo:
+
+```http
+GET /kpis/calls/agents/ranking?from=2026-01-01&to=2026-01-31&registeredEmployeesOnly=true
+```
+
 Response `200`:
 
 ```json

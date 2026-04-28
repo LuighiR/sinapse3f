@@ -36,12 +36,12 @@ export async function api<T>(
 }
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  public status: number
+
+  constructor(status: number, message: string) {
     super(message)
     this.name = "ApiError"
+    this.status = status
   }
 }
 
@@ -238,6 +238,7 @@ export interface KpiOpts {
   extensionUuid?: string
   extensionNumber?: string
   chatId?: string
+  registeredEmployeesOnly?: boolean
 }
 
 function kpiParams(opts: KpiOpts) {
@@ -592,7 +593,10 @@ export function getCallsHourly(opts: KpiOpts) {
 }
 
 export function getCallsAgentsRanking(opts: KpiOpts) {
-  return api<CallsAgentsRanking>(`/kpis/calls/agents/ranking?${kpiParams(opts)}`, {
+  const p = kpiParams(opts)
+  p.set("registeredEmployeesOnly", String(opts.registeredEmployeesOnly ?? true))
+
+  return api<CallsAgentsRanking>(`/kpis/calls/agents/ranking?${p}`, {
     token: opts.token,
     tenantId: opts.tenantId,
   })

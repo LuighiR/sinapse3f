@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -323,8 +324,13 @@ function CallsDrilldownDialog({
   const [hourlyData, setHourlyData] = React.useState<CallsHourly | null>(null)
   const [rankingData, setRankingData] = React.useState<CallsAgentsRanking | null>(null)
   const [comparisonData, setComparisonData] = React.useState<CallsHourlyComparison | null>(null)
+  const [rankingRegisteredEmployeesOnly, setRankingRegisteredEmployeesOnly] = React.useState(true)
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!open) setRankingRegisteredEmployeesOnly(true)
+  }, [open])
 
   React.useEffect(() => {
     if (!open || !kind) return
@@ -337,7 +343,10 @@ function CallsDrilldownDialog({
     setComparisonData(null)
 
     if (kind === "calls-ranking") {
-      getCallsAgentsRanking(opts)
+      getCallsAgentsRanking({
+        ...opts,
+        registeredEmployeesOnly: rankingRegisteredEmployeesOnly,
+      })
         .then(setRankingData)
         .catch((e: Error) => setError(e.message))
         .finally(() => setLoading(false))
@@ -352,7 +361,18 @@ function CallsDrilldownDialog({
         .catch((e: Error) => setError(e.message))
         .finally(() => setLoading(false))
     }
-  }, [open, kind, token, tenantId, from, to, branchId])
+  }, [
+    open,
+    kind,
+    token,
+    tenantId,
+    from,
+    to,
+    extensionUuid,
+    extensionNumber,
+    branchId,
+    rankingRegisteredEmployeesOnly,
+  ])
 
   const titles: Record<CallsDrilldownKind, { title: string; desc: string }> = {
     "calls-lost": {
@@ -387,8 +407,25 @@ function CallsDrilldownDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{config?.title ?? "Detalhamento"}</DialogTitle>
-          <DialogDescription>{config?.desc ?? ""}</DialogDescription>
+          <div className="flex flex-col gap-3 pr-12 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <DialogTitle>{config?.title ?? "Detalhamento"}</DialogTitle>
+              <DialogDescription>{config?.desc ?? ""}</DialogDescription>
+            </div>
+            {kind === "calls-ranking" && (
+              <Button
+                type="button"
+                variant={rankingRegisteredEmployeesOnly ? "outline" : "secondary"}
+                size="sm"
+                className="max-w-full self-start"
+                aria-pressed={!rankingRegisteredEmployeesOnly}
+                onClick={() => setRankingRegisteredEmployeesOnly((current) => !current)}
+              >
+                <UsersIcon className="size-4" />
+                {rankingRegisteredEmployeesOnly ? "Ver todos" : "Somente cadastrados"}
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto -mx-6 px-6">
