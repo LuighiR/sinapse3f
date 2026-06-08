@@ -147,7 +147,7 @@ export function SectionCards() {
     [employees, selectedEmployeeId],
   )
 
-  // Per-domain filter values derived from the selected employee
+  // Employee/ramal filter values derived from the selected employee
   const sellerId = selectedEmployee ? String(selectedEmployee.erpId) : undefined
   const extensionUuid = selectedEmployee?.extensionUuid ?? undefined
   const extensionNumber = selectedEmployee?.extensionNumber ?? undefined
@@ -225,7 +225,12 @@ export function SectionCards() {
       await Promise.all([
         refreshBudgets(opts),
         refreshSales(opts),
-        refreshCalls(opts),
+        refreshCalls({
+          token: session.accessToken,
+          tenantId: session.tenantId,
+          from,
+          to,
+        }),
       ])
       toast.success("KPIs atualizados com sucesso")
       fetchData()

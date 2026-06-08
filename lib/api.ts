@@ -241,10 +241,14 @@ export interface KpiOpts {
   registeredEmployeesOnly?: boolean
 }
 
+function kpiPeriodParams(opts: Pick<KpiOpts, "from" | "to">) {
+  return new URLSearchParams({ from: opts.from, to: opts.to })
+}
+
 function kpiParams(opts: KpiOpts) {
   const p: Record<string, string> = { from: opts.from, to: opts.to }
   if (opts.sellerId) p.sellerId = opts.sellerId
-  if (opts.branchId) p.branchId = opts.branchId
+  if (opts.branchId) p.branchId = String(opts.branchId)
   if (opts.status) p.status = opts.status
   if (opts.orderType) p.orderType = opts.orderType
   if (opts.hasLinkedBudget) p.hasLinkedBudget = opts.hasLinkedBudget
@@ -568,8 +572,8 @@ export function refreshSales(opts: KpiOpts) {
   })
 }
 
-export function refreshCalls(opts: KpiOpts) {
-  return api<RefreshResult>(`/kpis/calls/refresh?${kpiParams(opts)}`, {
+export function refreshCalls(opts: Pick<KpiOpts, "token" | "tenantId" | "from" | "to">) {
+  return api<RefreshResult>(`/kpis/calls/refresh?${kpiPeriodParams(opts)}`, {
     method: "POST",
     token: opts.token,
     tenantId: opts.tenantId,
