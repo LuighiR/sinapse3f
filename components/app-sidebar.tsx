@@ -22,6 +22,7 @@ import {
   LayoutDashboardIcon,
   Settings2Icon,
   ShoppingCartIcon,
+  Building2Icon,
 } from "lucide-react"
 
 import { useAuth } from "@/lib/auth-context"
@@ -32,6 +33,11 @@ const navMain = [
     title: "Dashboard",
     url: "/dashboard",
     icon: <LayoutDashboardIcon />,
+  },
+  {
+    title: "Gerência",
+    url: "/dashboard/gerencia",
+    icon: <Building2Icon />,
   },
   {
     title: "Orçamentos",

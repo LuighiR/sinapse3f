@@ -1,0 +1,44 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
+
+import { AppSidebar } from "@/components/app-sidebar"
+import { GerenciaSectionCards } from "@/components/gerencia-section-cards"
+import { SiteHeader } from "@/components/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { useAuth } from "@/lib/auth-context"
+
+export default function GerenciaPage() {
+  const { session } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!session) router.replace("/login")
+  }, [session, router])
+
+  if (!session) return null
+
+  return (
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader title="Gerência" />
+        <div className="flex flex-1 flex-col">
+          <div className="@container/main flex flex-1 flex-col gap-2">
+            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+              <GerenciaSectionCards />
+            </div>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
