@@ -33,7 +33,7 @@ import {
   TrendingUpIcon,
   TagIcon,
 } from "lucide-react"
-import type { WhatsAppKpiData } from "@/lib/mock-gerencia-data"
+import type { WhatsAppKpiData } from "@/lib/gerencia-kpi-types"
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value)
@@ -257,15 +257,6 @@ export function GerenciaWhatsAppSection({ data }: { data: WhatsAppKpiData }) {
           </CardContent>
         </Card>
       </div>
-    </div>
-  )
-}
-
-export function GerenciaWhatsAppSectionHeader() {
-  return (
-    <div className="flex items-center gap-2">
-      <MessageCircleIcon className="size-5 text-muted-foreground" />
-      <h2 className="text-lg font-semibold">WhatsApp</h2>
     </div>
   )
 }

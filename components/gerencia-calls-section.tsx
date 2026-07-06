@@ -28,14 +28,13 @@ import {
 import {
   PhoneIncomingIcon,
   PhoneMissedIcon,
-  PhoneIcon,
   UsersIcon,
   FileSpreadsheetIcon,
   ClockIcon,
   TrendingUpIcon,
   TrendingDownIcon,
 } from "lucide-react"
-import type { CallsKpiData } from "@/lib/mock-gerencia-data"
+import type { CallsKpiData } from "@/lib/gerencia-kpi-types"
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value)
@@ -251,15 +250,6 @@ export function GerenciaCallsSection({ data }: { data: CallsKpiData }) {
           </CardContent>
         </Card>
       </div>
-    </div>
-  )
-}
-
-export function GerenciaCallsSectionHeader() {
-  return (
-    <div className="flex items-center gap-2">
-      <PhoneIcon className="size-5 text-muted-foreground" />
-      <h2 className="text-lg font-semibold">Ligações</h2>
     </div>
   )
 }

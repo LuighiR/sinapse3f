@@ -1,9 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { format } from "date-fns"
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+} from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Card,
   CardAction,
@@ -19,22 +25,217 @@ import {
   ShoppingCartIcon,
   ClockIcon,
   Building2Icon,
+  PhoneIcon,
+  MessageCircleIcon,
+  RefreshCwIcon,
+  CalendarIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 import type { BudgetSummary, FollowUpSummary, SalesSummary } from "@/lib/api"
-import {
-  CITIES,
-  CITY_DATA,
-  GERAL_DATA,
-  type CityKpiData,
-} from "@/lib/mock-gerencia-data"
+import { refreshBudgets, refreshCalls, refreshSales } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
+import { fetchGerenciaKpis } from "@/lib/fetch-gerencia-kpis"
+import type { BranchKpiData, CityKpiData, GerenciaKpiBundle } from "@/lib/gerencia-kpi-types"
 import {
   GerenciaCallsSection,
-  GerenciaCallsSectionHeader,
 } from "@/components/gerencia-calls-section"
 import {
   GerenciaWhatsAppSection,
-  GerenciaWhatsAppSectionHeader,
 } from "@/components/gerencia-whatsapp-section"
+import { cn } from "@/lib/utils"
+
+function toYMD(d: Date) {
+  return format(d, "yyyy-MM-dd")
+}
+
+function clampToday(d: Date) {
+  const now = new Date()
+  return d > now ? now : d
+}
+
+function CardSkeleton() {
+  return (
+    <Card className="@container/card">
+      <CardHeader>
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-8 w-24 mt-1" />
+      </CardHeader>
+      <CardFooter className="flex-col items-start gap-1.5">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-3 w-28" />
+      </CardFooter>
+    </Card>
+  )
+}
+
+function BudgetCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <CardSkeleton key={i} />
+      ))}
+    </div>
+  )
+}
+
+function FollowUpCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <CardSkeleton key={i} />
+      ))}
+    </div>
+  )
+}
+
+function SalesCardsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <CardSkeleton key={i} />
+      ))}
+    </div>
+  )
+}
+
+function CommsCardsSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <CardSkeleton key={i} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2">
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </div>
+    </div>
+  )
+}
+
+type SectionTheme = "sky" | "emerald" | "violet" | "amber" | "green"
+
+const SECTION_THEME: Record<
+  SectionTheme,
+  { border: string; icon: string; badge: string }
+> = {
+  sky: {
+    border: "border-l-sky-500/80",
+    icon: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+    badge: "bg-sky-100/80 text-sky-800 dark:bg-sky-950/80 dark:text-sky-200",
+  },
+  emerald: {
+    border: "border-l-emerald-500/80",
+    icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+    badge: "bg-emerald-100/80 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200",
+  },
+  violet: {
+    border: "border-l-violet-500/80",
+    icon: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+    badge: "bg-violet-100/80 text-violet-800 dark:bg-violet-950/80 dark:text-violet-200",
+  },
+  amber: {
+    border: "border-l-amber-500/80",
+    icon: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    badge: "bg-amber-100/80 text-amber-800 dark:bg-amber-950/80 dark:text-amber-200",
+  },
+  green: {
+    border: "border-l-green-600/80",
+    icon: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+    badge: "bg-green-100/80 text-green-800 dark:bg-green-950/80 dark:text-green-200",
+  },
+}
+
+function GerenciaSectionZone({
+  id,
+  title,
+  icon,
+  theme,
+  shaded,
+  children,
+}: {
+  id: string
+  title: string
+  icon: React.ReactNode
+  theme: SectionTheme
+  shaded: boolean
+  children: React.ReactNode
+}) {
+  const styles = SECTION_THEME[theme]
+
+  return (
+    <section
+      id={id}
+      className={cn(
+        "flex flex-col gap-6 rounded-2xl border border-border/70 border-l-4 p-5 shadow-xs lg:p-7",
+        styles.border,
+        shaded
+          ? "bg-muted/50 dark:bg-muted/25"
+          : "bg-background dark:bg-background",
+      )}
+    >
+      <div className="flex items-center gap-3 border-b border-border/60 pb-4">
+        <div
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl [&>svg]:size-5",
+            styles.icon,
+          )}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          <p className="text-sm text-muted-foreground">
+            Visão geral e detalhamento por filial
+          </p>
+        </div>
+        <Badge variant="outline" className={cn("hidden sm:inline-flex", styles.badge)}>
+          Seção
+        </Badge>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function GerenciaSubsection({
+  title,
+  variant = "geral",
+  children,
+}: {
+  title: string
+  variant?: "geral" | "cidade"
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-4 rounded-xl border p-4 lg:p-5",
+        variant === "geral"
+          ? "border-border/50 bg-background/90 shadow-xs dark:bg-background/60"
+          : "border-dashed border-muted-foreground/30 bg-background/95 dark:bg-background/70",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        {variant === "cidade" && (
+          <Building2Icon className="size-4 text-muted-foreground" />
+        )}
+        <h3
+          className={cn(
+            "font-semibold",
+            variant === "geral"
+              ? "text-sm uppercase tracking-wide text-muted-foreground"
+              : "text-base",
+          )}
+        >
+          {title}
+        </h3>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -497,197 +698,349 @@ function SalesCards({
   )
 }
 
-function CityBlock({
-  title,
-  subtitle,
-  data,
-}: {
-  title: string
-  subtitle?: string
-  data: CityKpiData
-}) {
+function CityBlock({ title, data }: { title: string; data: CityKpiData }) {
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-dashed border-muted-foreground/25 p-4 lg:p-5">
-      <div className="flex items-center gap-2">
-        <Building2Icon className="size-4 text-muted-foreground" />
-        <h3 className="text-base font-semibold">{title}</h3>
-        {subtitle && (
-          <span className="text-sm text-muted-foreground">{subtitle}</span>
-        )}
-      </div>
+    <GerenciaSubsection title={title} variant="cidade">
       <BudgetCards data={data.budgets} />
-    </div>
+    </GerenciaSubsection>
   )
 }
 
 function CityFollowUpBlock({ title, data }: { title: string; data: FollowUpSummary }) {
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-dashed border-muted-foreground/25 p-4 lg:p-5">
-      <div className="flex items-center gap-2">
-        <Building2Icon className="size-4 text-muted-foreground" />
-        <h3 className="text-base font-semibold">{title}</h3>
-      </div>
+    <GerenciaSubsection title={title} variant="cidade">
       <FollowUpCards data={data} />
-    </div>
+    </GerenciaSubsection>
   )
 }
 
-function CitySalesBlock({
-  title,
-  data,
-}: {
-  title: string
-  data: CityKpiData
-}) {
+function CitySalesBlock({ title, data }: { title: string; data: CityKpiData }) {
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-dashed border-muted-foreground/25 p-4 lg:p-5">
-      <div className="flex items-center gap-2">
-        <Building2Icon className="size-4 text-muted-foreground" />
-        <h3 className="text-base font-semibold">{title}</h3>
-      </div>
+    <GerenciaSubsection title={title} variant="cidade">
       <SalesCards
         sales={data.sales}
         salesWithBudget={data.salesWithBudget}
         salesWithoutBudget={data.salesWithoutBudget}
       />
-    </div>
+    </GerenciaSubsection>
   )
 }
 
 export function GerenciaSectionCards() {
-  const periodLabel = format(new Date(), "MMMM yyyy", { locale: ptBR })
+  const { session } = useAuth()
+  const [selectedMonth, setSelectedMonth] = React.useState(() => new Date())
+  const [data, setData] = React.useState<GerenciaKpiBundle | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [refreshing, setRefreshing] = React.useState(false)
+  const [loadError, setLoadError] = React.useState(false)
+
+  const { from, to } = React.useMemo(() => {
+    const start = startOfMonth(selectedMonth)
+    const end = clampToday(endOfMonth(selectedMonth))
+    return { from: toYMD(start), to: toYMD(end) }
+  }, [selectedMonth])
+
+  const fetchData = React.useCallback(() => {
+    if (!session) return
+    setLoading(true)
+    setLoadError(false)
+    fetchGerenciaKpis({
+      token: session.accessToken,
+      tenantId: session.tenantId,
+      from,
+      to,
+    })
+      .then(setData)
+      .catch((e) => {
+        console.error("[Gerencia] KPIs", e)
+        setLoadError(true)
+        setData(null)
+        toast.error("Erro ao carregar dados da gerência")
+      })
+      .finally(() => setLoading(false))
+  }, [session, from, to])
+
+  React.useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  async function handleRefresh() {
+    if (!session || refreshing) return
+    setRefreshing(true)
+    try {
+      const opts = {
+        token: session.accessToken,
+        tenantId: session.tenantId,
+        from,
+        to,
+      }
+      await Promise.all([
+        refreshBudgets(opts),
+        refreshSales(opts),
+        refreshCalls(opts),
+      ])
+      toast.success("KPIs atualizados com sucesso")
+      await fetchGerenciaKpis(opts).then(setData)
+    } catch {
+      toast.error("Erro ao atualizar KPIs")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const periodLabel = format(selectedMonth, "MMMM yyyy", { locale: ptBR })
+  const isCurrentMonth =
+    selectedMonth.getFullYear() === new Date().getFullYear() &&
+    selectedMonth.getMonth() === new Date().getMonth()
+
+  const branches = data?.branches ?? []
+
+  if (!loading && loadError) {
+    return (
+      <div className="flex flex-col items-center gap-4 px-4 py-16 lg:px-6">
+        <p className="text-sm text-muted-foreground">
+          Não foi possível carregar os KPIs da gerência.
+        </p>
+        <Button variant="outline" onClick={fetchData}>
+          Tentar novamente
+        </Button>
+      </div>
+    )
+  }
 
   return (
-    <div className="flex flex-col gap-8 px-4 lg:px-6">
-      <div className="flex items-baseline justify-between gap-4">
-        <p className="text-sm text-muted-foreground capitalize">
-          Visão consolidada · {periodLabel}
-        </p>
-        <Badge variant="secondary">Mock</Badge>
-      </div>
-
-      {/* Orçamentos */}
-      <div className="flex flex-col gap-6" id="orcamentos">
-        <div className="flex items-center gap-2">
-          <FileSpreadsheetIcon className="size-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Orçamentos</h2>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Geral
-          </h3>
-          <BudgetCards data={GERAL_DATA.budgets} />
-        </div>
-
-        {CITIES.map((city) => (
-          <CityBlock
-            key={`budget-${city}`}
-            title={city}
-            data={CITY_DATA[city]}
-          />
-        ))}
-      </div>
-
-      {/* Follow-up */}
-      <div className="flex flex-col gap-6" id="follow-up">
-        <div className="flex items-center gap-2">
-          <ClockIcon className="size-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Follow-up de Orçamentos</h2>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Geral
-          </h3>
-          <FollowUpCards data={GERAL_DATA.followUp} />
-        </div>
-
-        {CITIES.map((city) => (
-          <CityFollowUpBlock
-            key={`followup-${city}`}
-            title={city}
-            data={CITY_DATA[city].followUp}
-          />
-        ))}
-      </div>
-
-      {/* Vendas */}
-      <div className="flex flex-col gap-6" id="vendas">
-        <div className="flex items-center gap-2">
-          <ShoppingCartIcon className="size-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Vendas</h2>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Geral
-          </h3>
-          <SalesCards
-            sales={GERAL_DATA.sales}
-            salesWithBudget={GERAL_DATA.salesWithBudget}
-            salesWithoutBudget={GERAL_DATA.salesWithoutBudget}
-          />
-        </div>
-
-        {CITIES.map((city) => (
-          <CitySalesBlock
-            key={`sales-${city}`}
-            title={city}
-            data={CITY_DATA[city]}
-          />
-        ))}
-      </div>
-
-      {/* Ligações */}
-      <div className="flex flex-col gap-6" id="ligacoes">
-        <GerenciaCallsSectionHeader />
-
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Geral
-          </h3>
-          <GerenciaCallsSection data={GERAL_DATA.calls} />
-        </div>
-
-        {CITIES.map((city) => (
-          <div
-            key={`calls-${city}`}
-            className="flex flex-col gap-4 rounded-lg border border-dashed border-muted-foreground/25 p-4 lg:p-5"
+    <div className="flex flex-col gap-6 px-4 lg:px-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={() =>
+              setSelectedMonth(
+                (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+              )
+            }
           >
-            <div className="flex items-center gap-2">
-              <Building2Icon className="size-4 text-muted-foreground" />
-              <h3 className="text-base font-semibold">{city}</h3>
-            </div>
-            <GerenciaCallsSection data={CITY_DATA[city].calls} />
-          </div>
-        ))}
-      </div>
-
-      {/* WhatsApp */}
-      <div className="flex flex-col gap-6" id="whatsapp">
-        <GerenciaWhatsAppSectionHeader />
-
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-            Geral
-          </h3>
-          <GerenciaWhatsAppSection data={GERAL_DATA.whatsapp} />
+            <span className="sr-only">Mês anterior</span>
+            <CalendarIcon className="size-4" />
+            <span className="text-xs">‹</span>
+          </Button>
+          <span className="min-w-[120px] text-center text-sm font-medium capitalize">
+            {periodLabel}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            disabled={isCurrentMonth}
+            onClick={() =>
+              setSelectedMonth(
+                (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+              )
+            }
+          >
+            <span className="sr-only">Próximo mês</span>
+            <CalendarIcon className="size-4" />
+            <span className="text-xs">›</span>
+          </Button>
         </div>
 
-        {CITIES.map((city) => (
-          <div
-            key={`whatsapp-${city}`}
-            className="flex flex-col gap-4 rounded-lg border border-dashed border-muted-foreground/25 p-4 lg:p-5"
-          >
-            <div className="flex items-center gap-2">
-              <Building2Icon className="size-4 text-muted-foreground" />
-              <h3 className="text-base font-semibold">{city}</h3>
-            </div>
-            <GerenciaWhatsAppSection data={CITY_DATA[city].whatsapp} />
-          </div>
-        ))}
+        <span className="text-xs text-muted-foreground">
+          {from} → {to}
+        </span>
+
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refreshing || loading}
+          onClick={handleRefresh}
+          className="ml-auto gap-2"
+        >
+          <RefreshCwIcon
+            className={`size-4 ${refreshing ? "animate-spin" : ""}`}
+          />
+          {refreshing ? "Atualizando..." : "Atualizar KPIs"}
+        </Button>
       </div>
+
+      <GerenciaSectionZone
+        id="orcamentos"
+        title="Orçamentos"
+        icon={<FileSpreadsheetIcon />}
+        theme="sky"
+        shaded
+      >
+        {loading || !data ? (
+          <>
+            <GerenciaSubsection title="Geral">
+              <BudgetCardsSkeleton />
+            </GerenciaSubsection>
+            {branches.map(({ branch }) => (
+              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+                <BudgetCardsSkeleton />
+              </GerenciaSubsection>
+            ))}
+          </>
+        ) : (
+          <>
+            <GerenciaSubsection title="Geral">
+              <BudgetCards data={data.geral.budgets} />
+            </GerenciaSubsection>
+            {data.branches.map(({ branch, data: branchData }) => (
+              <CityBlock
+                key={`budget-${branch.id}`}
+                title={branch.name}
+                data={branchData}
+              />
+            ))}
+          </>
+        )}
+      </GerenciaSectionZone>
+
+      <GerenciaSectionZone
+        id="follow-up"
+        title="Follow-up de Orçamentos"
+        icon={<ClockIcon />}
+        theme="emerald"
+        shaded={false}
+      >
+        {loading || !data ? (
+          <>
+            <GerenciaSubsection title="Geral">
+              <FollowUpCardsSkeleton />
+            </GerenciaSubsection>
+            {branches.map(({ branch }) => (
+              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+                <FollowUpCardsSkeleton />
+              </GerenciaSubsection>
+            ))}
+          </>
+        ) : (
+          <>
+            <GerenciaSubsection title="Geral">
+              <FollowUpCards data={data.geral.followUp} />
+            </GerenciaSubsection>
+            {data.branches.map(({ branch, data: branchData }) => (
+              <CityFollowUpBlock
+                key={`followup-${branch.id}`}
+                title={branch.name}
+                data={branchData.followUp}
+              />
+            ))}
+          </>
+        )}
+      </GerenciaSectionZone>
+
+      <GerenciaSectionZone
+        id="vendas"
+        title="Vendas"
+        icon={<ShoppingCartIcon />}
+        theme="violet"
+        shaded
+      >
+        {loading || !data ? (
+          <>
+            <GerenciaSubsection title="Geral">
+              <SalesCardsSkeleton />
+            </GerenciaSubsection>
+            {branches.map(({ branch }) => (
+              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+                <SalesCardsSkeleton />
+              </GerenciaSubsection>
+            ))}
+          </>
+        ) : (
+          <>
+            <GerenciaSubsection title="Geral">
+              <SalesCards
+                sales={data.geral.sales}
+                salesWithBudget={data.geral.salesWithBudget}
+                salesWithoutBudget={data.geral.salesWithoutBudget}
+              />
+            </GerenciaSubsection>
+            {data.branches.map(({ branch, data: branchData }) => (
+              <CitySalesBlock
+                key={`sales-${branch.id}`}
+                title={branch.name}
+                data={branchData}
+              />
+            ))}
+          </>
+        )}
+      </GerenciaSectionZone>
+
+      <GerenciaSectionZone
+        id="ligacoes"
+        title="Ligações"
+        icon={<PhoneIcon />}
+        theme="amber"
+        shaded={false}
+      >
+        {loading || !data ? (
+          <>
+            <GerenciaSubsection title="Geral">
+              <CommsCardsSkeleton />
+            </GerenciaSubsection>
+            {branches.map(({ branch }) => (
+              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+                <CommsCardsSkeleton />
+              </GerenciaSubsection>
+            ))}
+          </>
+        ) : (
+          <>
+            <GerenciaSubsection title="Geral">
+              <GerenciaCallsSection data={data.geral.calls} />
+            </GerenciaSubsection>
+            {data.branches.map(({ branch, data: branchData }) => (
+              <GerenciaSubsection
+                key={`calls-${branch.id}`}
+                title={branch.name}
+                variant="cidade"
+              >
+                <GerenciaCallsSection data={branchData.calls} />
+              </GerenciaSubsection>
+            ))}
+          </>
+        )}
+      </GerenciaSectionZone>
+
+      <GerenciaSectionZone
+        id="whatsapp"
+        title="WhatsApp"
+        icon={<MessageCircleIcon />}
+        theme="green"
+        shaded
+      >
+        {loading || !data ? (
+          <>
+            <GerenciaSubsection title="Geral">
+              <CommsCardsSkeleton />
+            </GerenciaSubsection>
+            {branches.map(({ branch }) => (
+              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+                <CommsCardsSkeleton />
+              </GerenciaSubsection>
+            ))}
+          </>
+        ) : (
+          <>
+            <GerenciaSubsection title="Geral">
+              <GerenciaWhatsAppSection data={data.geral.whatsapp} />
+            </GerenciaSubsection>
+            {data.branches.map(({ branch, data: branchData }) => (
+              <GerenciaSubsection
+                key={`whatsapp-${branch.id}`}
+                title={branch.name}
+                variant="cidade"
+              >
+                <GerenciaWhatsAppSection data={branchData.whatsapp} />
+              </GerenciaSubsection>
+            ))}
+          </>
+        )}
+      </GerenciaSectionZone>
     </div>
   )
 }
