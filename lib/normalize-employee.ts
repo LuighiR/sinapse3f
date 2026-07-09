@@ -35,7 +35,7 @@ export function normalizeEmployee(raw: EmployeeLike): NormalizedEmployee {
 }
 
 export function sellerIdForBranch(
-  employee: Pick<NormalizedEmployee, "erpUsers">,
+  employee: { erpUsers: { erpId: number; branchId: number }[] },
   branchId: number,
 ): number | undefined {
   return employee.erpUsers.find((u) => u.branchId === branchId)?.erpId
