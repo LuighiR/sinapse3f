@@ -1,3 +1,10 @@
+import {
+  normalizeEmployee,
+  type EmployeeErpUser,
+  type EmployeeLike,
+  type NormalizedEmployee,
+} from "./normalize-employee"
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
 
 type RequestOptions = Omit<RequestInit, "headers"> & {
@@ -158,21 +165,16 @@ export function getBranches(opts: { token: string; tenantId: string }) {
   })
 }
 
-export interface Employee {
-  id: number
-  erpId: number
-  name: string
-  branchId: number
-  extensionNumber: string | null
-  extensionUuid: string | null
-  chatId: string | null
-}
+export type { EmployeeErpUser, EmployeeLike, NormalizedEmployee }
 
-export function getEmployees(opts: { token: string; tenantId: string }) {
-  return api<Employee[]>("/companies/current/employees", {
+export type Employee = NormalizedEmployee
+
+export async function getEmployees(opts: { token: string; tenantId: string }) {
+  const rows = await api<EmployeeLike[]>("/companies/current/employees", {
     token: opts.token,
     tenantId: opts.tenantId,
   })
+  return rows.map(normalizeEmployee)
 }
 
 // ── KPI Types ──
