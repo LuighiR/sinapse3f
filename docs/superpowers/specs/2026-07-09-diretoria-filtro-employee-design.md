@@ -52,7 +52,7 @@ Extrair fetch/UI reutilizavel da Gerencia; Diretoria chama o mesmo nucleo com `e
 
 ### Modelo de dados (frontend)
 
-Atualizar `Employee` em `lib/api.ts` para refletir a API:
+Atualizar `Employee` em `lib/api.ts` para refletir a API e **incluir shim de compat** para telas legadas:
 
 ```ts
 interface EmployeeErpUser {
@@ -71,15 +71,25 @@ interface Employee {
   isNonCommercial?: boolean
   erpUsers: EmployeeErpUser[]
   /**
-   * Legado: algumas telas (Vendas/Orcamentos/Follow-up/Dashboard) ainda leem erpId flat.
-   * Manter como campo opcional de compat se o backend ainda enviar; a Diretoria NAO usa.
-   * Preferir derivar de erpUsers[0]?.erpId apenas se alguma tela legada quebrar.
+   * Compat legado para Vendas/Orcamentos/Follow-up/Dashboard.
+   * Sempre preenchido no client apos getEmployees:
+   *   erpId = payload.erpId ?? erpUsers[0]?.erpId ?? 0
+   * Diretoria ignora este campo e usa so erpUsers por branchId.
    */
-  erpId?: number
+  erpId: number
 }
 ```
 
+**Decisao de contrato (obrigatoria no plano):**
+
+1. Tipar a resposta da API com `erpUsers: EmployeeErpUser[]` (obrigatorio; default `[]` se ausente)
+2. Em `getEmployees` (ou wrapper fino), normalizar cada item para garantir `erpId` number via `payload.erpId ?? erpUsers[0]?.erpId ?? 0`
+3. Telas legadas **nao** precisam ser refatoradas neste escopo — continuam lendo `employee.erpId`
+4. Diretoria usa **somente** `erpUsers` por `branchId`
+
 Seletor da Diretoria: listar **todos** os employees retornados por `getEmployees` (sem filtrar `isNonCommercial`), igual as outras paginas hoje.
+
+**Employee com `erpUsers` vazio:** permitir selecao; todas as cidades ficam em zero; Geral fica zerado; nao disparar requests de KPI por filial (equivalente a "sem vinculo em todas").
 
 Resolucao por filial:
 
@@ -152,7 +162,7 @@ Entrada: lista de `CityKpiData` das filiais **com vinculo** (ignorar zeros de fi
 
 - Falha ao listar employees → toast + empty
 - Falha em uma filial → toast; demais continuam; Geral soma so o que veio ok
-- Refresh: mesmo fluxo da Gerencia, restrito a employee selecionado
+- Refresh: espelha a Gerencia — chama `refreshBudgets` / `refreshSales` / `refreshCalls` com `token`, `tenantId`, `from`, `to` (sem `sellerId` / `branchId`, igual ao codigo atual da Gerencia); depois refetch dos KPIs da Diretoria no modo employee. Botao desabilitado sem employee selecionado.
 
 ## Impacto Tecnico
 
@@ -165,20 +175,22 @@ Arquivos principais:
 - `lib/gerencia-kpi-types.ts` — tipos auxiliares se necessario
 - `lib/api.ts` — tipo `Employee` com `erpUsers`
 
-Telas legadas (Vendas/Orcamentos/Follow-up/Dashboard) podem continuar usando `erpId` flat se ainda existir no payload; a Diretoria usa exclusivamente `erpUsers`.
+Telas legadas (Vendas/Orcamentos/Follow-up/Dashboard) continuam usando `employee.erpId` via shim em `getEmployees`; a Diretoria usa exclusivamente `erpUsers`.
 
 ## Fora de Escopo
 
 - Alterar comportamento da Gerencia (sem filtro de employee)
 - Novos endpoints no backend
 - Filtro por branch na Diretoria
-- Refatorar filtro de employee das outras paginas para multi-loja
+- Refatorar filtro de employee das outras paginas para multi-loja (`erpUsers` por cidade)
 
 ## Criterios de Aceite
 
 1. Sidebar mostra Diretoria abaixo de Gerencia
 2. Sem employee: empty state, zero requests de KPI
 3. Com employee: cada cidade usa o `erpId` correto daquela filial
-4. Filial sem vinculo: zeros, sem request com sellerId errado
-5. Geral = soma das filiais com vinculo
-6. Gerencia continua funcionando sem regressao visual/funcional
+4. Filial sem vinculo: zeros (incluindo calls/WhatsApp), sem request com sellerId errado
+5. Employee com `erpUsers` vazio: todas as cidades e Geral em zero, sem requests de KPI por filial
+6. Geral = soma das filiais com vinculo, seguindo as regras de agregacao
+7. `getEmployees` normaliza `erpId` para nao regressar Vendas/Orcamentos/Follow-up/Dashboard
+8. Gerencia continua funcionando sem regressao visual/funcional
