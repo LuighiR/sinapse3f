@@ -38,66 +38,126 @@ function emptyTagComparison(from: string, to: string): WhatsAppTagComparison {
   }
 }
 
+function basePeriodOpts(opts: KpiOpts): KpiOpts {
+  return {
+    token: opts.token,
+    tenantId: opts.tenantId,
+    from: opts.from,
+    to: opts.to,
+    ...(opts.branchId ? { branchId: opts.branchId } : {}),
+  }
+}
+
+/** Budgets/sales/follow-up: branchId + sellerId only (never ramal/chatId). */
+function commerceOpts(opts: KpiOpts): KpiOpts {
+  return {
+    ...basePeriodOpts(opts),
+    ...(opts.sellerId ? { sellerId: opts.sellerId } : {}),
+  }
+}
+
+/** Calls: branchId + extension filters only (sellerId does not filter calls). */
+function callsOpts(opts: KpiOpts): KpiOpts {
+  return {
+    ...basePeriodOpts(opts),
+    ...(opts.extensionUuid ? { extensionUuid: opts.extensionUuid } : {}),
+    ...(opts.extensionNumber ? { extensionNumber: opts.extensionNumber } : {}),
+  }
+}
+
+/** WhatsApp analytics: branchId + chatId (sellerId only on tag comparison). */
+function whatsappOpts(opts: KpiOpts): KpiOpts {
+  return {
+    ...basePeriodOpts(opts),
+    ...(opts.chatId ? { chatId: opts.chatId } : {}),
+  }
+}
+
+function whatsappTagComparisonOpts(opts: KpiOpts): KpiOpts {
+  return {
+    ...whatsappOpts(opts),
+    ...(opts.sellerId ? { sellerId: opts.sellerId } : {}),
+  }
+}
+
+async function fetchCallsSection(
+  opts: KpiOpts,
+): Promise<CallsKpiData> {
+  const cOpts = callsOpts(opts)
+  const empty = emptyCityKpi(opts.from, opts.to).calls
+  try {
+    const [summary, hourly, ranking, comparison] = await Promise.all([
+      getCallsSummary(cOpts),
+      getCallsHourly(cOpts),
+      getCallsAgentsRanking(cOpts),
+      getCallsHourlyComparison(cOpts),
+    ])
+    return { summary, hourly, ranking, comparison }
+  } catch (e) {
+    console.error("[Gerencia] calls KPIs", e)
+    return empty
+  }
+}
+
+async function fetchWhatsAppSection(
+  opts: KpiOpts,
+): Promise<WhatsAppKpiData> {
+  const wOpts = whatsappOpts(opts)
+  const empty = emptyCityKpi(opts.from, opts.to).whatsapp
+  try {
+    const [summary, ranking, sessionsHourly, messagesHourly, waTags] =
+      await Promise.all([
+        getWhatsAppSummary(wOpts),
+        getWhatsAppAgentsRanking(wOpts),
+        getWhatsAppSessionsHourly(wOpts),
+        getWhatsAppMessagesHourly(wOpts),
+        getWhatsAppTags(wOpts),
+      ])
+
+    const tagId = waTags.tags[0]?.tagId
+    let tagComparison = emptyTagComparison(opts.from, opts.to)
+    if (tagId) {
+      try {
+        tagComparison = await getWhatsAppTagComparison({
+          ...whatsappTagComparisonOpts(opts),
+          tagId,
+        })
+      } catch (e) {
+        console.error("[Gerencia] whatsapp tag comparison", e)
+      }
+    }
+
+    return {
+      summary,
+      ranking,
+      sessionsHourly,
+      messagesHourly,
+      tagComparison,
+    }
+  } catch (e) {
+    console.error("[Gerencia] whatsapp KPIs", e)
+    return empty
+  }
+}
+
 async function fetchScopeKpis(
   opts: KpiOpts,
   referenceAt: string,
 ): Promise<CityKpiData> {
-  const [
-    budgets,
-    sales,
-    salesWithBudget,
-    salesWithoutBudget,
-    followUp,
-    callsSummary,
-    callsHourly,
-    callsRanking,
-    callsComparison,
-    waSummary,
-    waRanking,
-    waSessionsHourly,
-    waMessagesHourly,
-    waTags,
-  ] = await Promise.all([
-    getBudgetSummary(opts),
-    getSalesSummary(opts),
-    getSalesSummary({ ...opts, hasLinkedBudget: "true" }),
-    getSalesSummary({ ...opts, hasLinkedBudget: "false" }),
-    getBudgetFollowUp({ ...opts, referenceAt }),
-    getCallsSummary(opts),
-    getCallsHourly(opts),
-    getCallsAgentsRanking(opts),
-    getCallsHourlyComparison(opts),
-    getWhatsAppSummary(opts),
-    getWhatsAppAgentsRanking(opts),
-    getWhatsAppSessionsHourly(opts),
-    getWhatsAppMessagesHourly(opts),
-    getWhatsAppTags(opts),
-  ])
+  const cOpts = commerceOpts(opts)
 
-  const tagId = waTags.tags[0]?.tagId
-  let tagComparison = emptyTagComparison(opts.from, opts.to)
-  if (tagId) {
-    try {
-      tagComparison = await getWhatsAppTagComparison({ ...opts, tagId })
-    } catch (e) {
-      console.error("[Gerencia] whatsapp tag comparison", e)
-    }
-  }
-
-  const calls: CallsKpiData = {
-    summary: callsSummary,
-    hourly: callsHourly,
-    ranking: callsRanking,
-    comparison: callsComparison,
-  }
-
-  const whatsapp: WhatsAppKpiData = {
-    summary: waSummary,
-    ranking: waRanking,
-    sessionsHourly: waSessionsHourly,
-    messagesHourly: waMessagesHourly,
-    tagComparison,
-  }
+  // Commerce failures fail the whole scope (branch marked failed upstream).
+  // Calls/WhatsApp failures degrade to empty sections so budgets/sales still show.
+  const [budgets, sales, salesWithBudget, salesWithoutBudget, followUp, calls, whatsapp] =
+    await Promise.all([
+      getBudgetSummary(cOpts),
+      getSalesSummary(cOpts),
+      getSalesSummary({ ...cOpts, hasLinkedBudget: "true" }),
+      getSalesSummary({ ...cOpts, hasLinkedBudget: "false" }),
+      getBudgetFollowUp({ ...cOpts, referenceAt }),
+      fetchCallsSection(opts),
+      fetchWhatsAppSection(opts),
+    ])
 
   return {
     budgets,
