@@ -253,7 +253,7 @@ test("sums budget totals across branches", () => {
 })
 ```
 
-Helpers internos sugeridos: `sumMoney(a,b)`, `pct(part, total)`, `daysInclusive(from,to)`.
+Helpers internos sugeridos: `sumMoney(a,b)`, `pct(part, total)` com `toFixed(1)` (mesma precisao tipica da UI), `daysInclusive(from,to)`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -378,6 +378,8 @@ type GerenciaSectionCardsProps = {
 export function GerenciaSectionCards({ mode = "gerencia" }: GerenciaSectionCardsProps) {
 ```
 
+Estado `data` tipado como `FetchGerenciaKpisResult | null` (inclui `failedBranchIds`), nao so `GerenciaKpiBundle`.
+
 - [ ] **Step 2: Estado employee (so diretoria)**
 
 - `selectedEmployeeId`, `employees`
@@ -498,8 +500,9 @@ Expected: exit 0
 1. Sidebar: Diretoria abaixo de Gerencia
 2. Abrir Diretoria sem employee → empty state, Network sem KPI
 3. Selecionar employee com 2 filiais → Geral + cidades; cidade sem vinculo = 0
-4. Abrir Gerencia → ainda carrega sem seletor de employee
-5. Vendas ainda lista employees (shim erpId)
+4. Employee com `erpUsers` vazio → todas cidades/Geral zerados, sem requests de KPI por filial
+5. Abrir Gerencia → ainda carrega sem seletor de employee
+6. Vendas ainda lista employees (shim erpId)
 
 - [ ] **Step 4: Final commit se houver ajustes**
 
