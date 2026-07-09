@@ -10,8 +10,24 @@ import type {
 import type { CityKpiData } from "./gerencia-kpi-types.ts"
 import { emptyCityKpi } from "./empty-city-kpi.ts"
 
+/** Parse a money string into integer cents (2 decimal places, half-up). */
+function toCents(value: string): number {
+  const n = Number.parseFloat(value || "0")
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 100)
+}
+
+/** Serialize integer cents back to a money string without trailing zeros noise. */
+function fromCents(cents: number): string {
+  const whole = Math.trunc(cents / 100)
+  const frac = Math.abs(cents % 100)
+  if (frac === 0) return String(whole)
+  if (frac % 10 === 0) return `${whole}.${frac / 10}`
+  return `${whole}.${String(frac).padStart(2, "0")}`
+}
+
 function sumMoney(a: string, b: string): string {
-  return String(parseFloat(a || "0") + parseFloat(b || "0"))
+  return fromCents(toCents(a) + toCents(b))
 }
 
 function pct(part: number, total: number): string {
@@ -154,7 +170,7 @@ function peakHourFrom(rows: CallsHourlyRow[]): { hour: string; totalInboundCount
 
 function averageTicketValue(total: { count: number; value: string }): string {
   if (total.count === 0) return "0"
-  return String(parseFloat(total.value) / total.count)
+  return fromCents(Math.round(toCents(total.value) / total.count))
 }
 
 function averageDailyFrom(
@@ -164,7 +180,7 @@ function averageDailyFrom(
   if (days <= 0) return { count: "0", value: "0" }
   return {
     count: String(total.count / days),
-    value: String(parseFloat(total.value) / days),
+    value: fromCents(Math.round(toCents(total.value) / days)),
   }
 }
 
