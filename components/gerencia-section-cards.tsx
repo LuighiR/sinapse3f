@@ -31,17 +31,30 @@ import {
   CalendarIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { BudgetSummary, FollowUpSummary, SalesSummary } from "@/lib/api"
-import { refreshBudgets, refreshCalls, refreshSales } from "@/lib/api"
+import type { BudgetSummary, Employee, FollowUpSummary, SalesSummary } from "@/lib/api"
+import {
+  getEmployees,
+  refreshBudgets,
+  refreshCalls,
+  refreshSales,
+} from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { fetchGerenciaKpis } from "@/lib/fetch-gerencia-kpis"
-import type { BranchKpiData, CityKpiData, GerenciaKpiBundle } from "@/lib/gerencia-kpi-types"
+import type { FetchGerenciaKpisResult } from "@/lib/fetch-gerencia-kpis"
+import type { BranchKpiData, CityKpiData } from "@/lib/gerencia-kpi-types"
 import {
   GerenciaCallsSection,
 } from "@/components/gerencia-calls-section"
 import {
   GerenciaWhatsAppSection,
 } from "@/components/gerencia-whatsapp-section"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 function toYMD(d: Date) {
@@ -726,13 +739,21 @@ function CitySalesBlock({ title, data }: { title: string; data: CityKpiData }) {
   )
 }
 
-export function GerenciaSectionCards() {
+type GerenciaSectionCardsProps = {
+  mode?: "gerencia" | "diretoria"
+}
+
+export function GerenciaSectionCards({
+  mode = "gerencia",
+}: GerenciaSectionCardsProps) {
   const { session } = useAuth()
   const [selectedMonth, setSelectedMonth] = React.useState(() => new Date())
-  const [data, setData] = React.useState<GerenciaKpiBundle | null>(null)
+  const [data, setData] = React.useState<FetchGerenciaKpisResult | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [loadError, setLoadError] = React.useState(false)
+  const [selectedEmployeeId, setSelectedEmployeeId] = React.useState("")
+  const [employees, setEmployees] = React.useState<Employee[]>([])
 
   const { from, to } = React.useMemo(() => {
     const start = startOfMonth(selectedMonth)
@@ -740,8 +761,29 @@ export function GerenciaSectionCards() {
     return { from: toYMD(start), to: toYMD(end) }
   }, [selectedMonth])
 
+  const selectedEmployee = React.useMemo(
+    () => employees.find((e) => String(e.id) === selectedEmployeeId) ?? null,
+    [employees, selectedEmployeeId],
+  )
+
+  React.useEffect(() => {
+    if (mode !== "diretoria" || !session) return
+    getEmployees({ token: session.accessToken, tenantId: session.tenantId })
+      .then(setEmployees)
+      .catch(() => {
+        toast.error("Erro ao carregar colaboradores")
+        setEmployees([])
+      })
+  }, [mode, session])
+
   const fetchData = React.useCallback(() => {
     if (!session) return
+    if (mode === "diretoria" && !selectedEmployee) {
+      setData(null)
+      setLoading(false)
+      setLoadError(false)
+      return
+    }
     setLoading(true)
     setLoadError(false)
     fetchGerenciaKpis({
@@ -749,16 +791,33 @@ export function GerenciaSectionCards() {
       tenantId: session.tenantId,
       from,
       to,
+      ...(mode === "diretoria" && selectedEmployee
+        ? { employee: selectedEmployee }
+        : {}),
     })
-      .then(setData)
+      .then((result) => {
+        setData(result)
+        if (mode === "diretoria" && result.failedBranchIds.length > 0) {
+          for (const id of result.failedBranchIds) {
+            const name =
+              result.branches.find((b) => b.branch.id === id)?.branch.name ??
+              String(id)
+            toast.error(`Erro ao carregar KPIs de ${name}`)
+          }
+        }
+      })
       .catch((e) => {
         console.error("[Gerencia] KPIs", e)
         setLoadError(true)
         setData(null)
-        toast.error("Erro ao carregar dados da gerência")
+        toast.error(
+          mode === "diretoria"
+            ? "Erro ao carregar dados da diretoria"
+            : "Erro ao carregar dados da gerência",
+        )
       })
       .finally(() => setLoading(false))
-  }, [session, from, to])
+  }, [session, from, to, mode, selectedEmployee])
 
   React.useEffect(() => {
     fetchData()
@@ -766,6 +825,7 @@ export function GerenciaSectionCards() {
 
   async function handleRefresh() {
     if (!session || refreshing) return
+    if (mode === "diretoria" && !selectedEmployee) return
     setRefreshing(true)
     try {
       const opts = {
@@ -780,7 +840,21 @@ export function GerenciaSectionCards() {
         refreshCalls(opts),
       ])
       toast.success("KPIs atualizados com sucesso")
-      await fetchGerenciaKpis(opts).then(setData)
+      const result = await fetchGerenciaKpis({
+        ...opts,
+        ...(mode === "diretoria" && selectedEmployee
+          ? { employee: selectedEmployee }
+          : {}),
+      })
+      setData(result)
+      if (mode === "diretoria" && result.failedBranchIds.length > 0) {
+        for (const id of result.failedBranchIds) {
+          const name =
+            result.branches.find((b) => b.branch.id === id)?.branch.name ??
+            String(id)
+          toast.error(`Erro ao carregar KPIs de ${name}`)
+        }
+      }
     } catch {
       toast.error("Erro ao atualizar KPIs")
     } finally {
@@ -794,6 +868,7 @@ export function GerenciaSectionCards() {
     selectedMonth.getMonth() === new Date().getMonth()
 
   const branches = data?.branches ?? []
+  const showEmptyEmployeeState = mode === "diretoria" && !selectedEmployeeId
 
   if (!loading && loadError) {
     return (
@@ -850,10 +925,32 @@ export function GerenciaSectionCards() {
           {from} → {to}
         </span>
 
+        {mode === "diretoria" && (
+          <Select
+            value={selectedEmployeeId || undefined}
+            onValueChange={setSelectedEmployeeId}
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Selecione um colaborador" />
+            </SelectTrigger>
+            <SelectContent>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={String(emp.id)}>
+                  {emp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Button
           variant="outline"
           size="sm"
-          disabled={refreshing || loading}
+          disabled={
+            refreshing ||
+            loading ||
+            (mode === "diretoria" && !selectedEmployeeId)
+          }
           onClick={handleRefresh}
           className="ml-auto gap-2"
         >
@@ -864,6 +961,14 @@ export function GerenciaSectionCards() {
         </Button>
       </div>
 
+      {showEmptyEmployeeState ? (
+        <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            Selecione um colaborador para ver os KPIs por cidade.
+          </p>
+        </div>
+      ) : (
+        <>
       <GerenciaSectionZone
         id="orcamentos"
         title="Orçamentos"
@@ -1041,6 +1146,8 @@ export function GerenciaSectionCards() {
           </>
         )}
       </GerenciaSectionZone>
+        </>
+      )}
     </div>
   )
 }
