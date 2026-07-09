@@ -131,7 +131,7 @@ Entrada: lista de `CityKpiData` das filiais **com vinculo** (ignorar zeros de fi
 
 - Follow-up `percentage` = `(parte.count / grupo.total.count) * 100` (string com mesma precisao da UI atual, tipicamente 1 casa)
 - Sales `averageTicket.value` = `total.value / total.count` (0 se count=0)
-- Sales `averageDaily` = totais do periodo / numero de dias do periodo (`from`→`to`, inclusive), mesma regra conceitual da API
+- Sales `averageDaily` = totais do periodo / numero de dias do periodo (`from`→`to`, inclusive no calendario America/Sao_Paulo); espelhar a mesma regra de dias usada pela API/Gerencia no codigo existente, sem inventar formula nova
 - Calls `peakHour` = hora com maior `totalInboundCount` na serie horaria ja mergeada
 
 **Rankings (calls agents / WhatsApp agents):**
@@ -161,7 +161,7 @@ Entrada: lista de `CityKpiData` das filiais **com vinculo** (ignorar zeros de fi
 ### Erros
 
 - Falha ao listar employees → toast + empty
-- Falha em uma filial → toast; demais continuam; Geral soma so o que veio ok
+- Falha em uma filial → toast; essa cidade mostra `CityKpiData` zerado (nao some da UI); demais filiais ok continuam; Geral soma so filiais com vinculo que retornaram com sucesso
 - Refresh: espelha a Gerencia — chama `refreshBudgets` / `refreshSales` / `refreshCalls` com `token`, `tenantId`, `from`, `to` (sem `sellerId` / `branchId`, igual ao codigo atual da Gerencia); depois refetch dos KPIs da Diretoria no modo employee. Botao desabilitado sem employee selecionado.
 
 ## Impacto Tecnico
