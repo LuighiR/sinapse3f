@@ -868,13 +868,15 @@ export function GerenciaSectionCards({
     selectedMonth.getMonth() === new Date().getMonth()
 
   const branches = data?.branches ?? []
-  const showEmptyEmployeeState = mode === "diretoria" && !selectedEmployeeId
+  const showEmptyEmployeeState = mode === "diretoria" && !selectedEmployee
 
   if (!loading && loadError) {
     return (
       <div className="flex flex-col items-center gap-4 px-4 py-16 lg:px-6">
         <p className="text-sm text-muted-foreground">
-          Não foi possível carregar os KPIs da gerência.
+          {mode === "diretoria"
+            ? "Não foi possível carregar os KPIs da diretoria."
+            : "Não foi possível carregar os KPIs da gerência."}
         </p>
         <Button variant="outline" onClick={fetchData}>
           Tentar novamente
@@ -946,11 +948,7 @@ export function GerenciaSectionCards({
         <Button
           variant="outline"
           size="sm"
-          disabled={
-            refreshing ||
-            loading ||
-            (mode === "diretoria" && !selectedEmployeeId)
-          }
+          disabled={refreshing || loading || showEmptyEmployeeState}
           onClick={handleRefresh}
           className="ml-auto gap-2"
         >
