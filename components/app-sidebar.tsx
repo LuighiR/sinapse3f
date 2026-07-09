@@ -23,6 +23,7 @@ import {
   Settings2Icon,
   ShoppingCartIcon,
   Building2Icon,
+  UsersIcon,
 } from "lucide-react"
 
 import { useAuth } from "@/lib/auth-context"
@@ -38,6 +39,11 @@ const navMain = [
     title: "Gerência",
     url: "/dashboard/gerencia",
     icon: <Building2Icon />,
+  },
+  {
+    title: "Diretoria",
+    url: "/dashboard/diretoria",
+    icon: <UsersIcon />,
   },
   {
     title: "Orçamentos",
