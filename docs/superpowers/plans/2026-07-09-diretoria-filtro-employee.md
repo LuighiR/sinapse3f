@@ -321,24 +321,31 @@ Expected: FAIL
 Assinatura:
 
 ```ts
+export type FetchGerenciaKpisResult = GerenciaKpiBundle & {
+  /** branchIds com vinculo ERP cuja request de KPI falhou (cidade veio zerada) */
+  failedBranchIds: number[]
+}
+
 export async function fetchGerenciaKpis(opts: {
   token: string
   tenantId: string
   from: string
   to: string
   employee?: NormalizedEmployee | null
-}): Promise<GerenciaKpiBundle>
+}): Promise<FetchGerenciaKpisResult>
 ```
+
+No modo Gerencia (sem employee), retornar `failedBranchIds: []` (ou so falhar o Promise inteiro como hoje — manter comportamento atual de throw global se preferir; se mudar para allSettled na Gerencia, fora de escopo — **nao** alterar Gerencia).
 
 Comportamento:
 
-1. Sem `employee` (modo Gerencia): comportamento atual (Geral sem branchId + cada branch so com branchId)
+1. Sem `employee` (modo Gerencia): comportamento atual (Geral sem branchId + cada branch so com branchId); `failedBranchIds: []`
 2. Com `employee`:
    - Nao chamar KPI "geral" na API
-   - Para cada branch: se `sellerIdForBranch` existe → `fetchScopeKpis` com `{ branchId, sellerId, extensionUuid?, extensionNumber?, chatId? }`; senao → `emptyCityKpi`
-   - Falha em uma filial: catch → toast fica na UI; no fetch retornar empty para aquela branch (ou throw parcial tratado no caller — preferir Promise.allSettled e empty + flag; manter simples: `allSettled`, empty no rejected)
-   - `geral = aggregateCityKpis(successfulLinkedCities, from, to)`
-   - Incluir **todas** as branches na lista (com zeros onde skip)
+   - Para cada branch: se `sellerIdForBranch` existe → `fetchScopeKpis` com `{ branchId: String(branch.id), sellerId: String(erpId), extensionUuid?, extensionNumber?, chatId? }` (`KpiOpts` tipa ids como `string`); senao → `emptyCityKpi` (nao conta como failed)
+   - Usar `Promise.allSettled` nas filiais com vinculo: rejected → `emptyCityKpi` + incluir `branch.id` em `failedBranchIds`
+   - `geral = aggregateCityKpis(successfulLinkedCities, from, to)` — **excluir** filiais em `failedBranchIds` e as sem vinculo
+   - Incluir **todas** as branches na lista `branches` (com zeros onde skip ou failed)
 
 Passar ramal/`chatId` so nas filiais com vinculo ERP.
 
@@ -375,15 +382,18 @@ export function GerenciaSectionCards({ mode = "gerencia" }: GerenciaSectionCards
 
 - `selectedEmployeeId`, `employees`
 - `useEffect` → `getEmployees` quando `mode === "diretoria"` e session ok
+- Listar **todos** os employees retornados (sem filtrar `isNonCommercial`)
+- Em falha de `getEmployees`: `toast.error("Erro ao carregar colaboradores")`, `setEmployees([])`, manter empty state
 - Select no toolbar (ao lado do mes), **sem** opcao "Todos" — placeholder "Selecione um colaborador"
 - Padrao visual: mesmo `Select` de `components/section-cards.tsx` (largura ~220px)
 
-- [ ] **Step 3: Fetch condicional**
+- [ ] **Step 3: Fetch condicional + toasts de filial**
 
-- `mode === "gerencia"`: fetch atual (sempre)
+- `mode === "gerencia"`: fetch atual (sempre); ignorar `failedBranchIds`
 - `mode === "diretoria"`:
   - sem employee → `setData(null)`, `setLoading(false)`, nao chamar KPIs
-  - com employee → `fetchGerenciaKpis({ ..., employee: selected })`
+  - com employee → `const result = await fetchGerenciaKpis({ ..., employee: selected })` → `setData(result)`
+  - Se `result.failedBranchIds.length > 0`: para cada id (ou um toast agregado), `toast.error` com o nome da filial (`result.branches.find(b => b.branch.id === id)?.branch.name`) — ex. `"Erro ao carregar KPIs de ${name}"`. Cidade ja vem zerada no bundle; Geral nao inclui essas filiais.
 
 - [ ] **Step 4: Empty state**
 
