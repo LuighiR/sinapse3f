@@ -505,7 +505,7 @@ Response `200`:
 
 Notas para o frontend:
 
-- usar `erpId` como `branchId` nas rotas de KPI (nao o `id` interno)
+- usar `id` como `branchId` nas rotas de KPI
 - nao usar `domainUuid` do client para filtrar chamadas
 - o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
 

@@ -393,7 +393,7 @@ export function SectionCards() {
             <SelectContent>
               <SelectItem value="__all__">Todas Filiais</SelectItem>
               {branches.map((b) => (
-                <SelectItem key={b.id} value={String(b.erpId)}>
+                <SelectItem key={b.id} value={String(b.id)}>
                   {b.name}
                 </SelectItem>
               ))}

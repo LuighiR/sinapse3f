@@ -471,7 +471,7 @@ export default function VendasPage() {
                   <SelectContent>
                     <SelectItem value="all">Todas Filiais</SelectItem>
                     {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={String(branch.erpId)}>
+                      <SelectItem key={branch.id} value={String(branch.id)}>
                         {branch.name}
                       </SelectItem>
                     ))}
