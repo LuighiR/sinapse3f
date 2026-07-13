@@ -740,11 +740,11 @@ function CitySalesBlock({ title, data }: { title: string; data: CityKpiData }) {
 }
 
 type GerenciaSectionCardsProps = {
-  mode?: "gerencia" | "diretoria"
+  mode?: "overview" | "employee"
 }
 
 export function GerenciaSectionCards({
-  mode = "gerencia",
+  mode = "overview",
 }: GerenciaSectionCardsProps) {
   const { session } = useAuth()
   const [selectedMonth, setSelectedMonth] = React.useState(() => new Date())
@@ -767,7 +767,7 @@ export function GerenciaSectionCards({
   )
 
   React.useEffect(() => {
-    if (mode !== "diretoria" || !session) return
+    if (mode !== "employee" || !session) return
     getEmployees({ token: session.accessToken, tenantId: session.tenantId })
       .then(setEmployees)
       .catch(() => {
@@ -778,7 +778,7 @@ export function GerenciaSectionCards({
 
   const fetchData = React.useCallback(() => {
     if (!session) return
-    if (mode === "diretoria" && !selectedEmployee) {
+    if (mode === "employee" && !selectedEmployee) {
       setData(null)
       setLoading(false)
       setLoadError(false)
@@ -791,13 +791,13 @@ export function GerenciaSectionCards({
       tenantId: session.tenantId,
       from,
       to,
-      ...(mode === "diretoria" && selectedEmployee
+      ...(mode === "employee" && selectedEmployee
         ? { employee: selectedEmployee }
         : {}),
     })
       .then((result) => {
         setData(result)
-        if (mode === "diretoria" && result.failedBranchIds.length > 0) {
+        if (mode === "employee" && result.failedBranchIds.length > 0) {
           for (const id of result.failedBranchIds) {
             const name =
               result.branches.find((b) => b.branch.id === id)?.branch.name ??
@@ -811,9 +811,9 @@ export function GerenciaSectionCards({
         setLoadError(true)
         setData(null)
         toast.error(
-          mode === "diretoria"
-            ? "Erro ao carregar dados da diretoria"
-            : "Erro ao carregar dados da gerência",
+          mode === "employee"
+            ? "Erro ao carregar dados da gerência"
+            : "Erro ao carregar dados da diretoria",
         )
       })
       .finally(() => setLoading(false))
@@ -825,7 +825,7 @@ export function GerenciaSectionCards({
 
   async function handleRefresh() {
     if (!session || refreshing) return
-    if (mode === "diretoria" && !selectedEmployee) return
+    if (mode === "employee" && !selectedEmployee) return
     setRefreshing(true)
     try {
       const opts = {
@@ -842,12 +842,12 @@ export function GerenciaSectionCards({
       toast.success("KPIs atualizados com sucesso")
       const result = await fetchGerenciaKpis({
         ...opts,
-        ...(mode === "diretoria" && selectedEmployee
+        ...(mode === "employee" && selectedEmployee
           ? { employee: selectedEmployee }
           : {}),
       })
       setData(result)
-      if (mode === "diretoria" && result.failedBranchIds.length > 0) {
+      if (mode === "employee" && result.failedBranchIds.length > 0) {
         for (const id of result.failedBranchIds) {
           const name =
             result.branches.find((b) => b.branch.id === id)?.branch.name ??
@@ -868,15 +868,15 @@ export function GerenciaSectionCards({
     selectedMonth.getMonth() === new Date().getMonth()
 
   const branches = data?.branches ?? []
-  const showEmptyEmployeeState = mode === "diretoria" && !selectedEmployee
+  const showEmptyEmployeeState = mode === "employee" && !selectedEmployee
 
   if (!loading && loadError) {
     return (
       <div className="flex flex-col items-center gap-4 px-4 py-16 lg:px-6">
         <p className="text-sm text-muted-foreground">
-          {mode === "diretoria"
-            ? "Não foi possível carregar os KPIs da diretoria."
-            : "Não foi possível carregar os KPIs da gerência."}
+          {mode === "employee"
+            ? "Não foi possível carregar os KPIs da gerência."
+            : "Não foi possível carregar os KPIs da diretoria."}
         </p>
         <Button variant="outline" onClick={fetchData}>
           Tentar novamente
@@ -927,7 +927,7 @@ export function GerenciaSectionCards({
           {from} → {to}
         </span>
 
-        {mode === "diretoria" && (
+        {mode === "employee" && (
           <Select
             value={selectedEmployeeId || undefined}
             onValueChange={setSelectedEmployeeId}
