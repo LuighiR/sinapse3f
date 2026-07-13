@@ -171,8 +171,9 @@ async function fetchScopeKpis(
 }
 
 /**
- * One employee → one branch (employee.branchId) + one sellerId (employee.erpId).
- * Other cities are skipped (zeros in the UI).
+ * Same erpId (sellerId) is applied to every branch.
+ * employee.branchId is primary only — do not skip other stores.
+ * erpId 0 → skip all fetches.
  */
 export function planDiretoriaBranches(
   employee: { erpId: number; branchId: number },

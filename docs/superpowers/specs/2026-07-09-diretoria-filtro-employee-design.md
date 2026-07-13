@@ -6,13 +6,15 @@ A pagina `app/dashboard/gerencia` mostra KPIs agregados da empresa e por filial 
 
 ## Objetivo
 
-Criar uma nova aba **Diretoria** (`/dashboard/diretoria`) que reutiliza o padrao visual e de KPIs da Gerencia, com seletor obrigatorio de employee, e popula **somente a filial do employee** (`employee.branchId`) com `sellerId = employee.erpId`.
+Criar uma nova aba **Diretoria** (`/dashboard/diretoria`) que reutiliza o padrao visual e de KPIs da Gerencia, com seletor obrigatorio de employee, e popula **todas as filiais cadastradas** com `sellerId = employee.erpId` (mesmo ERP em cada `branchId`).
 
-Comportamento esperado (exemplo Shaiane em Pelotas, `branchId=2`, `erpId=42754`):
+`employee.branchId` e apenas a filial principal/residencia — a pessoa pode vender em outras lojas com o mesmo `erpId`.
 
-- Pelotas: KPIs com `branchId=2` + `sellerId=42754`
-- Outras cidades: zeros (sem request)
-- **Geral**: igual aos KPIs da filial do employee (unica com vinculo)
+Comportamento esperado (exemplo Shaiane, `branchId` principal=2, `erpId=42754`):
+
+- Pelotas (`branchId=2`): KPIs com `sellerId=42754`
+- Santa Maria / Rio Grande / demais: tambem com `sellerId=42754` (API devolve 0 se nao houver movimento)
+- **Geral**: soma no frontend das filiais
 
 Sem employee selecionado: empty state pedindo selecao (nao carrega KPIs).
 
@@ -71,11 +73,8 @@ Seletor da Diretoria: listar **todos** os employees (sem filtrar `isNonCommercia
 Resolucao por filial:
 
 ```ts
-// so a filial de residencia/trabalho do employee tem vinculo
-const sellerIdForBranch =
-  employee.branchId === branchId && employee.erpId
-    ? employee.erpId
-    : undefined
+// mesmo erpId em todas as lojas; branchId do employee e so a principal
+const sellerIdForBranch = employee.erpId || undefined
 ```
 
 **Employee com `erpId` 0:** permitir selecao; todas as cidades e Geral em zero; sem requests de KPI.
@@ -86,12 +85,10 @@ Estender `fetchGerenciaKpis` com modo opcional de employee:
 
 1. Carregar `branches` via `getBranches`
 2. Se nao houver employee → nao buscar KPIs (UI empty state)
-3. Para cada branch:
-   - Se `branch.id === employee.branchId` e `erpId`: `fetchScopeKpis({ branchId, sellerId: erpId, ... })`
-   - Senao: `CityKpiData` inteiro zerado, sem chamar a API
-4. Calls (so na filial do employee): `extensionUuid` / `extensionNumber` (sem `sellerId`)
-5. WhatsApp (so na filial do employee): `chatId`; `sellerId` so em tags/comparison
-6. **Geral**: agregar so a(s) filial(is) com vinculo (na pratica, a do employee)
+3. Para **cada** branch cadastrada: `fetchScopeKpis({ branchId, sellerId: erpId, ... })`
+4. Calls: `extensionUuid` / `extensionNumber` (sem `sellerId`)
+5. WhatsApp: `chatId`; `sellerId` so em tags/comparison
+6. **Geral**: agregar no frontend todas as filiais com sucesso
 
 Filtros de dominio isolados: commerce nao recebe ramal/chatId; calls nao recebe sellerId; falha em calls/WA nao zera budgets/sales.
 
@@ -169,10 +166,10 @@ Telas legadas (Vendas/Orcamentos/Follow-up/Dashboard) continuam usando `employee
 
 1. Sidebar mostra Diretoria abaixo de Gerencia
 2. Sem employee: empty state, zero requests de KPI
-3. Com employee: so a cidade `employee.branchId` usa `sellerId = erpId`
-4. Outras filiais: zeros (incluindo calls/WhatsApp), sem request
+3. Com employee: **todas** as filiais usam `sellerId = erpId`
+4. Filial sem movimento: API/zeros na UI (request ainda e feito)
 5. Employee com `erpId` 0: todas as cidades e Geral em zero, sem requests de KPI
-6. Geral = KPIs da filial do employee (unica com vinculo)
+6. Geral = soma das filiais com sucesso
 7. `getEmployees` garante `erpId` number para telas legadas
 8. Gerencia continua funcionando sem regressao visual/funcional
-9. Falha em calls/WhatsApp nao zera budgets/sales da filial do employee
+9. Falha em calls/WhatsApp nao zera budgets/sales da filial

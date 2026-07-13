@@ -17,7 +17,7 @@ export interface NormalizedEmployee {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
-  /** Flat ERP id used as sellerId; employee belongs to a single branchId. */
+  /** Flat ERP id used as sellerId on every branch KPI request. */
   erpId: number
 }
 
@@ -37,14 +37,13 @@ export function normalizeEmployee(raw: EmployeeLike): NormalizedEmployee {
 }
 
 /**
- * Employee is scoped to a single residence/work branch.
- * Only that branch gets sellerId = erpId; other branches have no link.
+ * Flat erpId used as sellerId on every branch.
+ * employee.branchId is only the primary/residence branch — sales may exist on other stores.
  */
 export function sellerIdForBranch(
-  employee: Pick<NormalizedEmployee, "erpId" | "branchId">,
-  branchId: number,
+  employee: Pick<NormalizedEmployee, "erpId">,
+  _branchId: number,
 ): number | undefined {
-  if (employee.branchId !== branchId) return undefined
   if (!employee.erpId) return undefined
   return employee.erpId
 }
