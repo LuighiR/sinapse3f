@@ -497,14 +497,15 @@ Response `200`:
   {
     "id": 1,
     "name": "Matriz",
-    "clientId": "ferracosul"
+    "clientId": "ferracosul",
+    "erpId": 1
   }
 ]
 ```
 
 Notas para o frontend:
 
-- usar `id` como `branchId` nas rotas de KPI
+- usar `erpId` como `branchId` nas rotas de KPI (nao o `id` interno)
 - nao usar `domainUuid` do client para filtrar chamadas
 - o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
 

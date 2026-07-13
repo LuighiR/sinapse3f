@@ -155,6 +155,8 @@ export interface Branch {
   id: number
   name: string
   clientId: string
+  /** ERP branch id — use this as `branchId` on KPI routes */
+  erpId: number
 }
 
 export function getBranches(opts: { token: string; tenantId: string }) {

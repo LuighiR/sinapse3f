@@ -171,20 +171,35 @@ async function fetchScopeKpis(
 }
 
 /**
- * Same erpId (sellerId) is applied to every branch.
+ * Same seller erpId is applied to every branch.
+ * KPI `branchId` query param must be `branch.erpId` (not internal `branch.id`).
  * employee.branchId is primary only — do not skip other stores.
- * erpId 0 → skip all fetches.
+ * seller erpId 0 → skip all fetches.
  */
 export function planDiretoriaBranches(
   employee: { erpId: number; branchId: number },
-  branches: { id: number; name: string; clientId: string }[],
-): { branchId: number; sellerId?: number; skipFetch: boolean }[] {
+  branches: { id: number; name: string; clientId: string; erpId: number }[],
+): {
+  branchId: number
+  kpiBranchId: number
+  sellerId?: number
+  skipFetch: boolean
+}[] {
   return branches.map((branch) => {
     const sellerId = sellerIdForBranch(employee, branch.id)
     if (sellerId === undefined) {
-      return { branchId: branch.id, skipFetch: true }
+      return {
+        branchId: branch.id,
+        kpiBranchId: branch.erpId,
+        skipFetch: true,
+      }
     }
-    return { branchId: branch.id, sellerId, skipFetch: false }
+    return {
+      branchId: branch.id,
+      kpiBranchId: branch.erpId,
+      sellerId,
+      skipFetch: false,
+    }
   })
 }
 
@@ -211,7 +226,7 @@ export async function fetchGerenciaKpis(opts: {
       fetchScopeKpis(baseOpts, referenceAt),
       ...branches.map((branch) =>
         fetchScopeKpis(
-          { ...baseOpts, branchId: String(branch.id) },
+          { ...baseOpts, branchId: String(branch.erpId) },
           referenceAt,
         ),
       ),
@@ -246,7 +261,7 @@ export async function fetchGerenciaKpis(opts: {
         {
           ...baseOpts,
           ...ramalOpts,
-          branchId: String(item.branchId),
+          branchId: String(item.kpiBranchId),
           sellerId: String(item.sellerId),
         },
         referenceAt,

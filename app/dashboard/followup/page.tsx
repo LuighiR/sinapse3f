@@ -508,7 +508,7 @@ export default function FollowUpPage() {
                   <SelectContent>
                     <SelectItem value="all">Todas Filiais</SelectItem>
                     {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={String(branch.id)}>
+                      <SelectItem key={branch.id} value={String(branch.erpId)}>
                         {branch.name}
                       </SelectItem>
                     ))}
