@@ -2,20 +2,17 @@
 
 ## Contexto
 
-A pagina `app/dashboard/gerencia` mostra KPIs agregados da empresa e por filial (Geral + cidades), sem filtro de pessoa. A API ja documenta o fluxo correto para filtrar por pessoa em varias lojas via `GET /companies/current/employees` e o array `erpUsers` (`docs/api/rest-api.md`).
-
-Hoje o tipo `Employee` no frontend (`lib/api.ts`) ainda expoe um `erpId` flat e nao modela `erpUsers[]`. As telas de Vendas/Orcamentos/Follow-up usam esse `erpId` unico, o que nao serve para a grade multi-loja da Gerencia.
+A pagina `app/dashboard/gerencia` mostra KPIs agregados da empresa e por filial (Geral + cidades), sem filtro de pessoa. A API (`docs/api/rest-api.md`) modela employee com `erpId` flat + `branchId` de residencia/trabalho (um employee ↔ uma filial).
 
 ## Objetivo
 
-Criar uma nova aba **Diretoria** (`/dashboard/diretoria`) que reutiliza o padrao visual e de KPIs da Gerencia, com seletor obrigatorio de employee, e popula cada cidade com o `sellerId` (`erpId`) correspondente aquela filial.
+Criar uma nova aba **Diretoria** (`/dashboard/diretoria`) que reutiliza o padrao visual e de KPIs da Gerencia, com seletor obrigatorio de employee, e popula **somente a filial do employee** (`employee.branchId`) com `sellerId = employee.erpId`.
 
-Comportamento esperado (exemplo Joaozinho):
+Comportamento esperado (exemplo Shaiane em Pelotas, `branchId=2`, `erpId=42754`):
 
-- Pelotas: KPIs do `erpId` dele em Pelotas
-- Santa Maria: KPIs do `erpId` dele em Santa Maria
-- Rio Grande (sem vinculo): zeros
-- **Geral**: soma no frontend das filiais com vinculo
+- Pelotas: KPIs com `branchId=2` + `sellerId=42754`
+- Outras cidades: zeros (sem request)
+- **Geral**: igual aos KPIs da filial do employee (unica com vinculo)
 
 Sem employee selecionado: empty state pedindo selecao (nao carrega KPIs).
 
@@ -52,15 +49,9 @@ Extrair fetch/UI reutilizavel da Gerencia; Diretoria chama o mesmo nucleo com `e
 
 ### Modelo de dados (frontend)
 
-Atualizar `Employee` em `lib/api.ts` para refletir a API e **incluir shim de compat** para telas legadas:
+`Employee` alinhado a API (flat):
 
 ```ts
-interface EmployeeErpUser {
-  id: number
-  erpId: number
-  branchId: number
-}
-
 interface Employee {
   id: number
   name: string
@@ -69,50 +60,40 @@ interface Employee {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
-  erpUsers: EmployeeErpUser[]
-  /**
-   * Compat legado para Vendas/Orcamentos/Follow-up/Dashboard.
-   * Sempre preenchido no client apos getEmployees:
-   *   erpId = payload.erpId ?? erpUsers[0]?.erpId ?? 0
-   * Diretoria ignora este campo e usa so erpUsers por branchId.
-   */
-  erpId: number
+  erpId: number // sellerId nas rotas de budgets/sales
 }
 ```
 
-**Decisao de contrato (obrigatoria no plano):**
+`getEmployees` normaliza `erpId` com default `0` se ausente.
 
-1. Tipar a resposta da API com `erpUsers: EmployeeErpUser[]` (obrigatorio; default `[]` se ausente)
-2. Em `getEmployees` (ou wrapper fino), normalizar cada item para garantir `erpId` number via `payload.erpId ?? erpUsers[0]?.erpId ?? 0`
-3. Telas legadas **nao** precisam ser refatoradas neste escopo — continuam lendo `employee.erpId`
-4. Diretoria usa **somente** `erpUsers` por `branchId`
-
-Seletor da Diretoria: listar **todos** os employees retornados por `getEmployees` (sem filtrar `isNonCommercial`), igual as outras paginas hoje.
-
-**Employee com `erpUsers` vazio:** permitir selecao; todas as cidades ficam em zero; Geral fica zerado; nao disparar requests de KPI por filial (equivalente a "sem vinculo em todas").
+Seletor da Diretoria: listar **todos** os employees (sem filtrar `isNonCommercial`).
 
 Resolucao por filial:
 
 ```ts
-const sellerIdForBranch = employee.erpUsers.find((u) => u.branchId === branchId)?.erpId
+// so a filial de residencia/trabalho do employee tem vinculo
+const sellerIdForBranch =
+  employee.branchId === branchId && employee.erpId
+    ? employee.erpId
+    : undefined
 ```
 
-Nao usar `employee.branchId` (residencia) como filtro de KPI por loja.
+**Employee com `erpId` 0:** permitir selecao; todas as cidades e Geral em zero; sem requests de KPI.
 
 ### Fetch
 
-Estender `fetchGerenciaKpis` (ou extrair helper compartilhado) com modo opcional de employee:
+Estender `fetchGerenciaKpis` com modo opcional de employee:
 
 1. Carregar `branches` via `getBranches`
 2. Se nao houver employee → nao buscar KPIs (UI empty state)
 3. Para cada branch:
-   - Com vinculo: `fetchScopeKpis({ branchId, sellerId, ... })` + ramal/`chatId` conforme abaixo
-   - Sem vinculo: `CityKpiData` **inteiro** zerado (budgets, sales, follow-up, **calls e whatsapp**), sem chamar a API — mesmo que o employee tenha ramal/`chatId` global
-4. Calls (so filiais com vinculo): passar `extensionUuid` / `extensionNumber` do employee (`sellerId` nao filtra ligacoes)
-5. WhatsApp (so filiais com vinculo): passar `chatId` onde aplicavel; `sellerId` apenas onde a API ja usa (ex. tags/comparison)
-6. **Geral**: agregar no frontend **apenas** filiais com vinculo, com as regras abaixo
+   - Se `branch.id === employee.branchId` e `erpId`: `fetchScopeKpis({ branchId, sellerId: erpId, ... })`
+   - Senao: `CityKpiData` inteiro zerado, sem chamar a API
+4. Calls (so na filial do employee): `extensionUuid` / `extensionNumber` (sem `sellerId`)
+5. WhatsApp (so na filial do employee): `chatId`; `sellerId` so em tags/comparison
+6. **Geral**: agregar so a(s) filial(is) com vinculo (na pratica, a do employee)
 
-Nao chamar a API "sem branchId + um sellerId unico" para o Geral — isso misturaria ERP de outra loja.
+Filtros de dominio isolados: commerce nao recebe ramal/chatId; calls nao recebe sellerId; falha em calls/WA nao zera budgets/sales.
 
 ### Regras de agregacao do Geral
 
@@ -173,24 +154,25 @@ Arquivos principais:
 - `components/gerencia-section-cards.tsx` — extrair nucleo reutilizavel / modo employee
 - `lib/fetch-gerencia-kpis.ts` — modo employee + zeros + agregacao Geral
 - `lib/gerencia-kpi-types.ts` — tipos auxiliares se necessario
-- `lib/api.ts` — tipo `Employee` com `erpUsers`
+- `lib/api.ts` — tipo `Employee` flat (`erpId` + `branchId`)
 
-Telas legadas (Vendas/Orcamentos/Follow-up/Dashboard) continuam usando `employee.erpId` via shim em `getEmployees`; a Diretoria usa exclusivamente `erpUsers`.
+Telas legadas (Vendas/Orcamentos/Follow-up/Dashboard) continuam usando `employee.erpId`.
 
 ## Fora de Escopo
 
 - Alterar comportamento da Gerencia (sem filtro de employee)
 - Novos endpoints no backend
-- Filtro por branch na Diretoria
-- Refatorar filtro de employee das outras paginas para multi-loja (`erpUsers` por cidade)
+- Filtro por branch na Diretoria (alem do branch do employee)
+- Multi-loja por pessoa (`erpUsers`) — revertido na API
 
 ## Criterios de Aceite
 
 1. Sidebar mostra Diretoria abaixo de Gerencia
 2. Sem employee: empty state, zero requests de KPI
-3. Com employee: cada cidade usa o `erpId` correto daquela filial
-4. Filial sem vinculo: zeros (incluindo calls/WhatsApp), sem request com sellerId errado
-5. Employee com `erpUsers` vazio: todas as cidades e Geral em zero, sem requests de KPI por filial
-6. Geral = soma das filiais com vinculo, seguindo as regras de agregacao
-7. `getEmployees` normaliza `erpId` para nao regressar Vendas/Orcamentos/Follow-up/Dashboard
+3. Com employee: so a cidade `employee.branchId` usa `sellerId = erpId`
+4. Outras filiais: zeros (incluindo calls/WhatsApp), sem request
+5. Employee com `erpId` 0: todas as cidades e Geral em zero, sem requests de KPI
+6. Geral = KPIs da filial do employee (unica com vinculo)
+7. `getEmployees` garante `erpId` number para telas legadas
 8. Gerencia continua funcionando sem regressao visual/funcional
+9. Falha em calls/WhatsApp nao zera budgets/sales da filial do employee

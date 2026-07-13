@@ -1,9 +1,3 @@
-export interface EmployeeErpUser {
-  id: number
-  erpId: number
-  branchId: number
-}
-
 export interface EmployeeLike {
   id: number
   name: string
@@ -12,7 +6,6 @@ export interface EmployeeLike {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
-  erpUsers?: EmployeeErpUser[]
   erpId?: number
 }
 
@@ -24,19 +17,34 @@ export interface NormalizedEmployee {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
-  erpUsers: EmployeeErpUser[]
+  /** Flat ERP id used as sellerId; employee belongs to a single branchId. */
   erpId: number
 }
 
 export function normalizeEmployee(raw: EmployeeLike): NormalizedEmployee {
-  const erpUsers = Array.isArray(raw.erpUsers) ? raw.erpUsers : []
-  const erpId = raw.erpId ?? erpUsers[0]?.erpId ?? 0
-  return { ...raw, erpUsers, erpId }
+  return {
+    id: raw.id,
+    name: raw.name,
+    branchId: raw.branchId,
+    extensionNumber: raw.extensionNumber ?? null,
+    extensionUuid: raw.extensionUuid ?? null,
+    chatId: raw.chatId ?? null,
+    ...(raw.isNonCommercial !== undefined
+      ? { isNonCommercial: raw.isNonCommercial }
+      : {}),
+    erpId: raw.erpId ?? 0,
+  }
 }
 
+/**
+ * Employee is scoped to a single residence/work branch.
+ * Only that branch gets sellerId = erpId; other branches have no link.
+ */
 export function sellerIdForBranch(
-  employee: { erpUsers: { erpId: number; branchId: number }[] },
+  employee: Pick<NormalizedEmployee, "erpId" | "branchId">,
   branchId: number,
 ): number | undefined {
-  return employee.erpUsers.find((u) => u.branchId === branchId)?.erpId
+  if (employee.branchId !== branchId) return undefined
+  if (!employee.erpId) return undefined
+  return employee.erpId
 }

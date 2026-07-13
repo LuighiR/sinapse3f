@@ -170,8 +170,12 @@ async function fetchScopeKpis(
   }
 }
 
+/**
+ * One employee → one branch (employee.branchId) + one sellerId (employee.erpId).
+ * Other cities are skipped (zeros in the UI).
+ */
 export function planDiretoriaBranches(
-  employee: { erpUsers: { erpId: number; branchId: number }[] },
+  employee: { erpId: number; branchId: number },
   branches: { id: number; name: string; clientId: string }[],
 ): { branchId: number; sellerId?: number; skipFetch: boolean }[] {
   return branches.map((branch) => {

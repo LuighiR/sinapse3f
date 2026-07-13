@@ -1,6 +1,5 @@
 import {
   normalizeEmployee,
-  type EmployeeErpUser,
   type EmployeeLike,
   type NormalizedEmployee,
 } from "./normalize-employee.ts"
@@ -165,7 +164,7 @@ export function getBranches(opts: { token: string; tenantId: string }) {
   })
 }
 
-export type { EmployeeErpUser, EmployeeLike, NormalizedEmployee }
+export type { EmployeeLike, NormalizedEmployee }
 
 export type Employee = NormalizedEmployee
 
