@@ -12,6 +12,7 @@ import type {
   WhatsAppMessagesHourly,
   WhatsAppTagComparison,
   Branch,
+  WhatsAppCity,
 } from "@/lib/api"
 
 export interface CallsKpiData {
@@ -44,7 +45,14 @@ export interface BranchKpiData {
   data: CityKpiData
 }
 
+export interface WhatsAppCityKpiData {
+  city: WhatsAppCity
+  data: WhatsAppKpiData
+}
+
 export interface GerenciaKpiBundle {
   geral: CityKpiData
   branches: BranchKpiData[]
+  /** WhatsApp zona: cidades de GET /whatsapp-cities (independente de branches). */
+  whatsappCities: WhatsAppCityKpiData[]
 }

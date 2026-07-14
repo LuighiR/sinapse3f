@@ -7,6 +7,7 @@ import {
   getCallsHourly,
   getCallsAgentsRanking,
   getCallsHourlyComparison,
+  getWhatsAppCities,
   getWhatsAppSummary,
   getWhatsAppAgentsRanking,
   getWhatsAppSessionsHourly,
@@ -14,6 +15,7 @@ import {
   getWhatsAppTags,
   getWhatsAppTagComparison,
   type KpiOpts,
+  type WhatsAppCity,
   type WhatsAppTagComparison,
 } from "./api.ts"
 import type {
@@ -21,6 +23,7 @@ import type {
   CallsKpiData,
   CityKpiData,
   GerenciaKpiBundle,
+  WhatsAppCityKpiData,
   WhatsAppKpiData,
 } from "./gerencia-kpi-types.ts"
 import { aggregateCityKpis } from "./aggregate-city-kpis.ts"
@@ -65,11 +68,18 @@ function callsOpts(opts: KpiOpts): KpiOpts {
   }
 }
 
-/** WhatsApp analytics: branchId + chatId (sellerId only on tag comparison). */
+/**
+ * WhatsApp analytics: period + chatId + whatsappCityId.
+ * Do not send branchId (API ignores it; city filter is whatsappCityId).
+ */
 function whatsappOpts(opts: KpiOpts): KpiOpts {
   return {
-    ...basePeriodOpts(opts),
+    token: opts.token,
+    tenantId: opts.tenantId,
+    from: opts.from,
+    to: opts.to,
     ...(opts.chatId ? { chatId: opts.chatId } : {}),
+    ...(opts.whatsappCityId ? { whatsappCityId: opts.whatsappCityId } : {}),
   }
 }
 
@@ -80,9 +90,7 @@ function whatsappTagComparisonOpts(opts: KpiOpts): KpiOpts {
   }
 }
 
-async function fetchCallsSection(
-  opts: KpiOpts,
-): Promise<CallsKpiData> {
+async function fetchCallsSection(opts: KpiOpts): Promise<CallsKpiData> {
   const cOpts = callsOpts(opts)
   const empty = emptyCityKpi(opts.from, opts.to).calls
   try {
@@ -99,9 +107,7 @@ async function fetchCallsSection(
   }
 }
 
-async function fetchWhatsAppSection(
-  opts: KpiOpts,
-): Promise<WhatsAppKpiData> {
+async function fetchWhatsAppSection(opts: KpiOpts): Promise<WhatsAppKpiData> {
   const wOpts = whatsappOpts(opts)
   const empty = emptyCityKpi(opts.from, opts.to).whatsapp
   try {
@@ -136,19 +142,36 @@ async function fetchWhatsAppSection(
     }
   } catch (e) {
     console.error("[Gerencia] whatsapp KPIs", e)
-    return empty
+    throw e
   }
 }
 
+async function fetchWhatsAppSectionSafe(
+  opts: KpiOpts,
+): Promise<{ data: WhatsAppKpiData; failed: boolean }> {
+  try {
+    const data = await fetchWhatsAppSection(opts)
+    return { data, failed: false }
+  } catch {
+    return {
+      data: emptyCityKpi(opts.from, opts.to).whatsapp,
+      failed: true,
+    }
+  }
+}
+
+/**
+ * Commerce + calls for a branch/scope.
+ * WhatsApp is fetched separately (by whatsapp cities), so this leaves WA empty.
+ */
 async function fetchScopeKpis(
   opts: KpiOpts,
   referenceAt: string,
 ): Promise<CityKpiData> {
   const cOpts = commerceOpts(opts)
+  const emptyWa = emptyCityKpi(opts.from, opts.to).whatsapp
 
-  // Commerce failures fail the whole scope (branch marked failed upstream).
-  // Calls/WhatsApp failures degrade to empty sections so budgets/sales still show.
-  const [budgets, sales, salesWithBudget, salesWithoutBudget, followUp, calls, whatsapp] =
+  const [budgets, sales, salesWithBudget, salesWithoutBudget, followUp, calls] =
     await Promise.all([
       getBudgetSummary(cOpts),
       getSalesSummary(cOpts),
@@ -156,7 +179,6 @@ async function fetchScopeKpis(
       getSalesSummary({ ...cOpts, hasLinkedBudget: "false" }),
       getBudgetFollowUp({ ...cOpts, referenceAt }),
       fetchCallsSection(opts),
-      fetchWhatsAppSection(opts),
     ])
 
   return {
@@ -166,7 +188,82 @@ async function fetchScopeKpis(
     salesWithoutBudget: { active: salesWithoutBudget.active },
     followUp,
     calls,
-    whatsapp,
+    whatsapp: emptyWa,
+  }
+}
+
+async function loadWhatsAppCities(opts: {
+  token: string
+  tenantId: string
+}): Promise<{ cities: WhatsAppCity[]; loadFailed: boolean }> {
+  try {
+    const cities = await getWhatsAppCities({
+      token: opts.token,
+      tenantId: opts.tenantId,
+      activeOnly: true,
+    })
+    if (!Array.isArray(cities)) {
+      console.error("[Gerencia] whatsapp cities list: unexpected payload", cities)
+      return { cities: [], loadFailed: true }
+    }
+    return { cities, loadFailed: false }
+  } catch (e) {
+    console.error("[Gerencia] whatsapp cities list", e)
+    return { cities: [], loadFailed: true }
+  }
+}
+
+async function fetchWhatsAppBundle(opts: {
+  token: string
+  tenantId: string
+  from: string
+  to: string
+  chatId?: string
+  sellerId?: string
+}): Promise<{
+  geralWhatsApp: WhatsAppKpiData
+  whatsappCities: WhatsAppCityKpiData[]
+  failedWhatsAppCityIds: string[]
+  whatsappCitiesLoadFailed: boolean
+  geralWhatsAppFailed: boolean
+}> {
+  const { token, tenantId, from, to, chatId, sellerId } = opts
+  const baseWa: KpiOpts = {
+    token,
+    tenantId,
+    from,
+    to,
+    ...(chatId ? { chatId } : {}),
+    ...(sellerId ? { sellerId } : {}),
+  }
+
+  const { cities, loadFailed: whatsappCitiesLoadFailed } =
+    await loadWhatsAppCities({ token, tenantId })
+
+  const [geralResult, ...citySettled] = await Promise.all([
+    fetchWhatsAppSectionSafe(baseWa),
+    ...cities.map((city) =>
+      fetchWhatsAppSectionSafe({
+        ...baseWa,
+        whatsappCityId: city.id,
+      }).then((result) => ({ city, ...result })),
+    ),
+  ])
+
+  const failedWhatsAppCityIds: string[] = []
+  const whatsappCities: WhatsAppCityKpiData[] = []
+
+  for (const item of citySettled) {
+    whatsappCities.push({ city: item.city, data: item.data })
+    if (item.failed) failedWhatsAppCityIds.push(item.city.id)
+  }
+
+  return {
+    geralWhatsApp: geralResult.data,
+    whatsappCities,
+    failedWhatsAppCityIds,
+    whatsappCitiesLoadFailed,
+    geralWhatsAppFailed: geralResult.failed,
   }
 }
 
@@ -192,6 +289,10 @@ export function planDiretoriaBranches(
 export type FetchGerenciaKpisResult = GerenciaKpiBundle & {
   /** branchIds com vinculo ERP cuja request de KPI falhou (cidade veio zerada) */
   failedBranchIds: number[]
+  /** uuids de cidades WhatsApp cuja request de KPI falhou */
+  failedWhatsAppCityIds: string[]
+  /** listagem GET /whatsapp-cities falhou */
+  whatsappCitiesLoadFailed: boolean
 }
 
 export async function fetchGerenciaKpis(opts: {
@@ -205,10 +306,17 @@ export async function fetchGerenciaKpis(opts: {
   const referenceAt = `${to}T23:59:59-03:00`
   const baseOpts: KpiOpts = { token, tenantId, from, to }
 
-  const branches = await getBranches({ token, tenantId })
+  const chatId = employee?.chatId || undefined
+  const sellerIdForWa =
+    employee && employee.erpId !== 0 ? String(employee.erpId) : undefined
 
   if (!employee) {
-    const [geral, ...branchDataList] = await Promise.all([
+    const [branches, waBundle] = await Promise.all([
+      getBranches({ token, tenantId }),
+      fetchWhatsAppBundle({ token, tenantId, from, to }),
+    ])
+
+    const [geralScope, ...branchDataList] = await Promise.all([
       fetchScopeKpis(baseOpts, referenceAt),
       ...branches.map((branch) =>
         fetchScopeKpis(
@@ -218,43 +326,69 @@ export async function fetchGerenciaKpis(opts: {
       ),
     ])
 
+    const geral: CityKpiData = {
+      ...geralScope,
+      whatsapp: waBundle.geralWhatsApp,
+    }
+
     const branchEntries: BranchKpiData[] = branches.map((branch, index) => ({
       branch,
       data: branchDataList[index],
     }))
 
-    return { geral, branches: branchEntries, failedBranchIds: [] }
+    return {
+      geral,
+      branches: branchEntries,
+      whatsappCities: waBundle.whatsappCities,
+      failedBranchIds: [],
+      failedWhatsAppCityIds: waBundle.failedWhatsAppCityIds,
+      whatsappCitiesLoadFailed: waBundle.whatsappCitiesLoadFailed,
+    }
   }
 
+  const branches = await getBranches({ token, tenantId })
   const plan = planDiretoriaBranches(employee, branches)
   const failedBranchIds: number[] = []
   const successfulLinkedCities: CityKpiData[] = []
 
   const ramalOpts: Pick<
     KpiOpts,
-    "extensionUuid" | "extensionNumber" | "chatId"
+    "extensionUuid" | "extensionNumber"
   > = {}
   if (employee.extensionUuid) ramalOpts.extensionUuid = employee.extensionUuid
   if (employee.extensionNumber) ramalOpts.extensionNumber = employee.extensionNumber
-  if (employee.chatId) ramalOpts.chatId = employee.chatId
 
-  const settled = await Promise.allSettled(
-    plan.map(async (item) => {
-      if (item.skipFetch || item.sellerId === undefined) {
-        return { branchId: item.branchId, data: emptyCityKpi(from, to), linked: false }
-      }
-      const data = await fetchScopeKpis(
-        {
-          ...baseOpts,
-          ...ramalOpts,
-          branchId: String(item.branchId),
-          sellerId: String(item.sellerId),
-        },
-        referenceAt,
-      )
-      return { branchId: item.branchId, data, linked: true }
+  const [settled, waBundle] = await Promise.all([
+    Promise.allSettled(
+      plan.map(async (item) => {
+        if (item.skipFetch || item.sellerId === undefined) {
+          return {
+            branchId: item.branchId,
+            data: emptyCityKpi(from, to),
+            linked: false,
+          }
+        }
+        const data = await fetchScopeKpis(
+          {
+            ...baseOpts,
+            ...ramalOpts,
+            branchId: String(item.branchId),
+            sellerId: String(item.sellerId),
+          },
+          referenceAt,
+        )
+        return { branchId: item.branchId, data, linked: true }
+      }),
+    ),
+    fetchWhatsAppBundle({
+      token,
+      tenantId,
+      from,
+      to,
+      chatId,
+      sellerId: sellerIdForWa,
     }),
-  )
+  ])
 
   const dataByBranchId = new Map<number, CityKpiData>()
   for (let i = 0; i < settled.length; i++) {
@@ -278,7 +412,18 @@ export async function fetchGerenciaKpis(opts: {
     data: dataByBranchId.get(branch.id) ?? emptyCityKpi(from, to),
   }))
 
-  const geral = aggregateCityKpis(successfulLinkedCities, from, to)
+  const geralAggregated = aggregateCityKpis(successfulLinkedCities, from, to)
+  const geral: CityKpiData = {
+    ...geralAggregated,
+    whatsapp: waBundle.geralWhatsApp,
+  }
 
-  return { geral, branches: branchEntries, failedBranchIds }
+  return {
+    geral,
+    branches: branchEntries,
+    whatsappCities: waBundle.whatsappCities,
+    failedBranchIds,
+    failedWhatsAppCityIds: waBundle.failedWhatsAppCityIds,
+    whatsappCitiesLoadFailed: waBundle.whatsappCitiesLoadFailed,
+  }
 }

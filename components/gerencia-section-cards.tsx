@@ -805,6 +805,17 @@ export function GerenciaSectionCards({
             toast.error(`Erro ao carregar KPIs de ${name}`)
           }
         }
+        if (result.whatsappCitiesLoadFailed) {
+          toast.error("Erro ao carregar cidades do WhatsApp")
+        }
+        if (result.failedWhatsAppCityIds.length > 0) {
+          for (const id of result.failedWhatsAppCityIds) {
+            const name =
+              result.whatsappCities.find((c) => c.city.id === id)?.city.name ??
+              id
+            toast.error(`Erro ao carregar WhatsApp de ${name}`)
+          }
+        }
       })
       .catch((e) => {
         console.error("[Gerencia] KPIs", e)
@@ -855,6 +866,17 @@ export function GerenciaSectionCards({
           toast.error(`Erro ao carregar KPIs de ${name}`)
         }
       }
+      if (result.whatsappCitiesLoadFailed) {
+        toast.error("Erro ao carregar cidades do WhatsApp")
+      }
+      if (result.failedWhatsAppCityIds.length > 0) {
+        for (const id of result.failedWhatsAppCityIds) {
+          const name =
+            result.whatsappCities.find((c) => c.city.id === id)?.city.name ??
+            id
+          toast.error(`Erro ao carregar WhatsApp de ${name}`)
+        }
+      }
     } catch {
       toast.error("Erro ao atualizar KPIs")
     } finally {
@@ -868,6 +890,7 @@ export function GerenciaSectionCards({
     selectedMonth.getMonth() === new Date().getMonth()
 
   const branches = data?.branches ?? []
+  const whatsappCities = data?.whatsappCities ?? []
   const showEmptyEmployeeState = mode === "employee" && !selectedEmployee
 
   if (!loading && loadError) {
@@ -1121,8 +1144,12 @@ export function GerenciaSectionCards({
             <GerenciaSubsection title="Geral">
               <CommsCardsSkeleton />
             </GerenciaSubsection>
-            {branches.map(({ branch }) => (
-              <GerenciaSubsection key={branch.id} title={branch.name} variant="cidade">
+            {whatsappCities.map(({ city }) => (
+              <GerenciaSubsection
+                key={city.id}
+                title={city.name}
+                variant="cidade"
+              >
                 <CommsCardsSkeleton />
               </GerenciaSubsection>
             ))}
@@ -1132,13 +1159,13 @@ export function GerenciaSectionCards({
             <GerenciaSubsection title="Geral">
               <GerenciaWhatsAppSection data={data.geral.whatsapp} />
             </GerenciaSubsection>
-            {data.branches.map(({ branch, data: branchData }) => (
+            {data.whatsappCities.map(({ city, data: cityWa }) => (
               <GerenciaSubsection
-                key={`whatsapp-${branch.id}`}
-                title={branch.name}
+                key={`whatsapp-${city.id}`}
+                title={city.name}
                 variant="cidade"
               >
-                <GerenciaWhatsAppSection data={branchData.whatsapp} />
+                <GerenciaWhatsAppSection data={cityWa} />
               </GerenciaSubsection>
             ))}
           </>

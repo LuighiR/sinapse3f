@@ -497,6 +497,9 @@ Response `200`:
   {
     "id": 1,
     "name": "Matriz",
+    "address": "Rua Exemplo, 100",
+    "phone": "5333333333",
+    "cnpj": "00.000.000/0001-00",
     "clientId": "ferracosul",
     "erpId": 1
   }
@@ -506,6 +509,7 @@ Response `200`:
 Notas para o frontend:
 
 - usar `id` como `branchId` nas rotas de KPI
+- `erpId` e o codigo da filial no ERP (`core.branches.erp_id`), o mesmo valor que aparece em `raw.*.branch`
 - nao usar `domainUuid` do client para filtrar chamadas
 - o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
 
@@ -523,7 +527,7 @@ X-Tenant-Id: <tenant-id>
 
 Query Params:
 
-- `branchId` optional, integer
+- `branchId` optional, integer — filtra pela filial de **residencia** do employee (`employees.branch_id`)
 - `search` optional, text
 
 Exemplo:
@@ -537,18 +541,43 @@ Response `200`:
 ```json
 [
   {
-    "id": 35747,
+    "id": 12,
     "erpId": 35747,
     "name": "Fabiano Pereira da Silva",
     "branchId": 1,
     "extensionNumber": "101",
     "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
-    "chatId": "fabiano@empresa.com"
+    "chatId": "fabiano@empresa.com",
+    "isNonCommercial": false
   }
 ]
 ```
 
-`erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales`.
+Notas:
+
+- `erpId` e o identificador usado como `sellerId` nas rotas de `budgets` e `sales` (`core.employees.erp_id`)
+- `branchId` no employee e a filial onde a pessoa **reside** (ramal/chat); **nao** limita em quais lojas o `sellerId` pode filtrar
+- No ERP, o mesmo `seller_id` pode gerar orcamentos/vendas em varias filiais
+
+#### Guia frontend: filtro por pessoa nas 3+ lojas
+
+1. `GET /companies/current/employees` para montar o seletor de pessoa
+2. Liste **todas** as filiais (`GET /companies/current/branches`)
+3. Para cada coluna/loja, chame budgets/sales com o **mesmo** `sellerId = employee.erpId` + `branchId` da loja
+4. Se a resposta vier vazia / zerada para aquela loja, mostre **0**
+
+Exemplo — Shaiane (`erpId = 42754`):
+
+| Loja | `branchId` | Query | Resultado |
+|------|------------|-------|-----------|
+| Pelotas | 2 | `sellerId=42754&branchId=2` | numeros dela em Pelotas |
+| Santa Maria | 3 | `sellerId=42754&branchId=3` | numeros dela em Santa Maria (ou 0) |
+| Rio Grande | 4 | `sellerId=42754&branchId=4` | numeros dela em Rio Grande (ou 0) |
+
+Importante:
+
+- Calls: use `extensionUuid` / `extensionNumber` (nao `sellerId`)
+- WhatsApp: use `chatId` (`branchId` em WhatsApp e ignorado por enquanto)
 
 ## Budgets KPI
 
@@ -563,6 +592,7 @@ Budgets aceitam:
 - `orderType` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 `orderType` vem de `raw.ferraco_budgets.order_type`.
 
@@ -687,6 +717,7 @@ Query Params:
 - `orderType` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -783,6 +814,7 @@ Query Params:
 - `orderType` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -849,6 +881,7 @@ Query Params:
 - `orderType` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -948,6 +981,7 @@ Query Params:
 - `orderType` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Regra:
 
@@ -1125,6 +1159,7 @@ Query Params:
 - `branchName` optional
 
 Quando `sellerId` e informado nas rotas de budgets, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Exemplo:
 
@@ -1191,6 +1226,7 @@ Sales aceitam:
 - `hasLinkedBudget` optional: `true`, `false`
 
 Quando `sellerId` e informado nas rotas de sales, ele representa `core.employees.erp_id`.
+Para filtrar por **pessoa** em varias lojas, veja o guia em `GET /companies/current/employees` (mesmo `sellerId` + `branchId` por loja; sem dados = 0).
 
 Em vendas, `orderType` vem do budget vinculado por:
 
@@ -1884,6 +1920,61 @@ Rollout recomendado:
 6. validar `GET /internal/messaging/parity`
 7. setar `WHATSAPP_KPI_SOURCE=canonical` (ou `dual` para diagnostico)
 
+## WhatsApp Cities (classificacao por cidade)
+
+Cadastro tenant-scoped de cidades operacionais WhatsApp e mapa fila FLW (`departmentId`) → cidade. Independente de `core.branches`. Ver tambem `docs/messaging-module-overview.md`.
+
+Headers em todas as rotas:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+### `GET /whatsapp-cities`
+
+Lista cidades do tenant.
+
+Query Params:
+
+- `activeOnly` optional (`true` → so `isActive=true`)
+
+### `POST /whatsapp-cities`
+
+Body: `{ "name": "Pelotas" }`
+
+### `PATCH /whatsapp-cities/:id`
+
+Body: `{ "name"?: string, "isActive"?: boolean }`
+
+Sem delete duro na v1 — desativar com `isActive=false`.
+
+### `GET /whatsapp-department-mappings`
+
+Lista mapeamentos fila → cidade.
+
+Query Params:
+
+- `status` optional — `PENDING` | `MAPPED`
+
+### `POST /whatsapp-department-mappings`
+
+Body: `{ "departmentId": "<uuid>", "departmentLabel"?: string | null, "cityId"?: string | null }`
+
+- Com `cityId` → `MAPPED`; sem → `PENDING`
+- Upsert por `(clientId, departmentId)`
+- Se cidade/status mudou, atualiza `messaging_sessions.whatsapp_city_id` so daquela fila (`external_department_id`)
+
+### `PATCH /whatsapp-department-mappings/:id`
+
+Body parcial: `{ "departmentLabel"?: string | null, "cityId"?: string | null, "status"?: "PENDING" | "MAPPED" }`
+
+- Campo omitido preserva; `cityId: null` ou `status: PENDING` limpa cidade
+- Sync seletivo nas sessoes da fila, igual ao POST
+
+**Seed:** `npm run seed:whatsapp-cities` (Ferracosul + backfill historico)  
+**Migration:** `prisma/migrations/20260714_add_whatsapp_city_classification.sql`
+
 ## WhatsApp KPI
 
 ### Filters
@@ -1893,7 +1984,8 @@ WhatsApp e mensageria aceitam:
 - `from` required
 - `to` required
 - `chatId` optional
-- `branchId` optional
+- `branchId` optional — **aceito, mas ignorado por enquanto** (WhatsApp filtra por `chatId`/periodo; o front pode continuar enviando)
+- `whatsappCityId` optional (uuid) — filtra `messaging_sessions.whatsapp_city_id`; **efeito so no path canônico** (`WHATSAPP_KPI_SOURCE=canonical`); em `legacy` a coluna nao existe
 - `tagId` required apenas nas rotas por tag
 - `sellerId` optional apenas em `GET /kpis/whatsapp/tags/hourly/comparison`
 
@@ -1905,7 +1997,9 @@ KPIs por tag continuam no legado ate fase futura de contatos/tags no canônico.
 
 Quando `chatId` e informado nas rotas analiticas de WhatsApp, ele representa o email do atendente. No legado filtra `core.sessions.assigned_user_email`; no canônico filtra `core.messaging_sessions.assigned_agent_email` (case-insensitive).
 
-Quando `branchId` e informado no legado, o filtro e derivado de employee: `lower(btrim(core.employees.chat_id))` precisa casar com `lower(btrim(core.sessions.assigned_user_email))`. No canônico, filtra diretamente `core.messaging_sessions.branch_id` (mapeado via `branches.flw_department_id` para FLW).
+Quando `branchId` e informado nas rotas de WhatsApp, o backend **ignora** o parametro por enquanto (compatibilidade com o front). O filtro efetivo de pessoa e `chatId`.
+
+Quando `whatsappCityId` e informado, o filtro aplica-se apenas nas queries canônicas sobre `messaging_sessions`.
 
 Quando `sellerId` e informado em `GET /kpis/whatsapp/tags/hourly/comparison`, ele filtra somente `openBudgetsCount` pelo mesmo identificador de budgets e sales: `core.employees.erp_id` / `core.budget_facts.seller_id`.
 
@@ -1920,6 +2014,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -1950,6 +2045,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -1996,6 +2092,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2026,6 +2123,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2064,6 +2162,7 @@ Query Params:
 - `to`
 - `chatId` optional
 - `branchId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 
@@ -2093,6 +2192,7 @@ Query Params:
 - `from`
 - `to`
 - `chatId` optional
+- `whatsappCityId` optional (uuid; so canônico)
 
 Response `200`:
 

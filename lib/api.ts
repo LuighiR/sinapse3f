@@ -166,6 +166,29 @@ export function getBranches(opts: { token: string; tenantId: string }) {
   })
 }
 
+export interface WhatsAppCity {
+  id: string
+  name: string
+  isActive?: boolean
+}
+
+export function getWhatsAppCities(opts: {
+  token: string
+  tenantId: string
+  activeOnly?: boolean
+}) {
+  const params = new URLSearchParams()
+  if (opts.activeOnly) params.set("activeOnly", "true")
+  const qs = params.toString()
+  return api<WhatsAppCity[]>(
+    `/whatsapp-cities${qs ? `?${qs}` : ""}`,
+    {
+      token: opts.token,
+      tenantId: opts.tenantId,
+    },
+  )
+}
+
 export type { EmployeeLike, NormalizedEmployee }
 
 export type Employee = NormalizedEmployee
@@ -241,6 +264,8 @@ export interface KpiOpts {
   extensionUuid?: string
   extensionNumber?: string
   chatId?: string
+  /** WhatsApp city filter (uuid). Effect only when WHATSAPP_KPI_SOURCE=canonical. */
+  whatsappCityId?: string
   registeredEmployeesOnly?: boolean
 }
 
@@ -258,6 +283,7 @@ function kpiParams(opts: KpiOpts) {
   if (opts.extensionUuid) p.extensionUuid = opts.extensionUuid
   if (opts.extensionNumber) p.extensionNumber = opts.extensionNumber
   if (opts.chatId) p.chatId = opts.chatId
+  if (opts.whatsappCityId) p.whatsappCityId = opts.whatsappCityId
   return new URLSearchParams(p)
 }
 
