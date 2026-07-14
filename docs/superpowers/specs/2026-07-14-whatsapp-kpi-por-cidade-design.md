@@ -102,3 +102,11 @@ Outras zonas: inalteradas (`data.branches`).
 5. Branches só em orçamentos/vendas/calls/follow-up
 6. Falha de cities/cidade não zera o restante do dashboard
 7. Typecheck + testes do fetch/plan cobrindo opts de WhatsApp por city
+
+## Nota de ambiente
+
+Validacao visual da divisao por cidade exige `WHATSAPP_KPI_SOURCE=canonical`. Em `legacy`, `whatsappCityId` nao tem efeito nas queries.
+
+## Falhas parciais (decisao)
+
+Espelhar o padrao de `failedBranchIds`: o fetch retorna `failedWhatsAppCityIds: string[]` (uuids) e a UI dispara toast por cidade (ou agregado). Listagem de cities falhou → `whatsappCities: []` + toast de listagem; Geral WhatsApp ainda tenta carregar.
