@@ -59,10 +59,11 @@ function commerceOpts(opts: KpiOpts): KpiOpts {
   }
 }
 
-/** Calls: branchId + extension filters only (sellerId does not filter calls). */
+/** Calls: branchId + employee/extension filters (sellerId does not filter calls). */
 function callsOpts(opts: KpiOpts): KpiOpts {
   return {
     ...basePeriodOpts(opts),
+    ...(opts.employeeId ? { employeeId: opts.employeeId } : {}),
     ...(opts.extensionUuid ? { extensionUuid: opts.extensionUuid } : {}),
     ...(opts.extensionNumber ? { extensionNumber: opts.extensionNumber } : {}),
   }
@@ -94,10 +95,13 @@ async function fetchCallsSection(opts: KpiOpts): Promise<CallsKpiData> {
   const cOpts = callsOpts(opts)
   const empty = emptyCityKpi(opts.from, opts.to).calls
   try {
+    const skipRanking = Boolean(cOpts.employeeId)
     const [summary, hourly, ranking, comparison] = await Promise.all([
       getCallsSummary(cOpts),
       getCallsHourly(cOpts),
-      getCallsAgentsRanking(cOpts),
+      skipRanking
+        ? Promise.resolve(empty.ranking)
+        : getCallsAgentsRanking(cOpts),
       getCallsHourlyComparison(cOpts),
     ])
     return { summary, hourly, ranking, comparison }
@@ -351,12 +355,9 @@ export async function fetchGerenciaKpis(opts: {
   const failedBranchIds: number[] = []
   const successfulLinkedCities: CityKpiData[] = []
 
-  const ramalOpts: Pick<
-    KpiOpts,
-    "extensionUuid" | "extensionNumber"
-  > = {}
-  if (employee.extensionUuid) ramalOpts.extensionUuid = employee.extensionUuid
-  if (employee.extensionNumber) ramalOpts.extensionNumber = employee.extensionNumber
+  const callsEmployeeOpts: Pick<KpiOpts, "employeeId"> = {
+    employeeId: String(employee.id),
+  }
 
   const [settled, waBundle] = await Promise.all([
     Promise.allSettled(
@@ -371,7 +372,7 @@ export async function fetchGerenciaKpis(opts: {
         const data = await fetchScopeKpis(
           {
             ...baseOpts,
-            ...ramalOpts,
+            ...callsEmployeeOpts,
             branchId: String(item.branchId),
             sellerId: String(item.sellerId),
           },
