@@ -267,6 +267,15 @@ export interface KpiOpts {
   /** WhatsApp city filter (uuid). Effect only when WHATSAPP_KPI_SOURCE=canonical. */
   whatsappCityId?: string
   registeredEmployeesOnly?: boolean
+  employeeId?: string
+  direction?: string
+  outcome?: string // ANSWERED | UNANSWERED | UNCLASSIFIED
+  callerNumber?: string
+  destinationNumber?: string
+  durationMin?: string
+  durationMax?: string
+  page?: string
+  pageSize?: string
 }
 
 function kpiPeriodParams(opts: Pick<KpiOpts, "from" | "to">) {
@@ -284,6 +293,15 @@ function kpiParams(opts: KpiOpts) {
   if (opts.extensionNumber) p.extensionNumber = opts.extensionNumber
   if (opts.chatId) p.chatId = opts.chatId
   if (opts.whatsappCityId) p.whatsappCityId = opts.whatsappCityId
+  if (opts.employeeId) p.employeeId = opts.employeeId
+  if (opts.direction) p.direction = opts.direction
+  if (opts.outcome) p.outcome = opts.outcome
+  if (opts.callerNumber) p.callerNumber = opts.callerNumber
+  if (opts.destinationNumber) p.destinationNumber = opts.destinationNumber
+  if (opts.durationMin) p.durationMin = opts.durationMin
+  if (opts.durationMax) p.durationMax = opts.durationMax
+  if (opts.page) p.page = opts.page
+  if (opts.pageSize) p.pageSize = opts.pageSize
   return new URLSearchParams(p)
 }
 
@@ -640,6 +658,62 @@ export function getCallsHourlyComparison(opts: KpiOpts) {
     token: opts.token,
     tenantId: opts.tenantId,
   })
+}
+
+export type CallOutcome = "ANSWERED" | "UNANSWERED" | "UNCLASSIFIED"
+
+export interface CallsDrilldownRow {
+  id: string
+  startedAt: string
+  endedAt: string | null
+  durationSeconds: string
+  direction: string
+  status: string
+  outcome: CallOutcome
+  callerNumber: string | null
+  destinationNumber: string | null
+  extensionUuid: string | null
+  agentExtensionNumber: string | null
+  isInboundToCompany: boolean
+  isReceived: boolean
+  isLost: boolean
+  branchId: number | null
+  branchName: string | null
+  employeeId: number | null
+  employeeName: string | null
+}
+
+export interface CallsDrilldown {
+  period: KpiPeriod
+  filters: Record<string, unknown>
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+  rows: CallsDrilldownRow[]
+}
+
+export interface CallsFilterOptions {
+  period: KpiPeriod
+  filters: { branchId?: number }
+  statuses: string[]
+  directions: string[]
+}
+
+export function getCallsDrilldown(opts: KpiOpts) {
+  return api<CallsDrilldown>(`/kpis/calls/drilldown?${kpiParams(opts)}`, {
+    token: opts.token,
+    tenantId: opts.tenantId,
+  })
+}
+
+export function getCallsFilterOptions(opts: KpiOpts) {
+  return api<CallsFilterOptions>(
+    `/kpis/calls/filter-options?${kpiParams(opts)}`,
+    { token: opts.token, tenantId: opts.tenantId },
+  )
 }
 
 // ── WhatsApp KPI Types ──
