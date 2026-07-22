@@ -359,7 +359,7 @@ export async function fetchGerenciaKpis(opts: {
     employeeId: String(employee.id),
   }
 
-  const [settled, waBundle] = await Promise.all([
+  const [settled, waBundle, geralCalls] = await Promise.all([
     Promise.allSettled(
       plan.map(async (item) => {
         if (item.skipFetch || item.sellerId === undefined) {
@@ -389,6 +389,10 @@ export async function fetchGerenciaKpis(opts: {
       chatId,
       sellerId: sellerIdForWa,
     }),
+    fetchCallsSection({
+      ...baseOpts,
+      ...callsEmployeeOpts,
+    }),
   ])
 
   const dataByBranchId = new Map<number, CityKpiData>()
@@ -416,6 +420,7 @@ export async function fetchGerenciaKpis(opts: {
   const geralAggregated = aggregateCityKpis(successfulLinkedCities, from, to)
   const geral: CityKpiData = {
     ...geralAggregated,
+    calls: geralCalls,
     whatsapp: waBundle.geralWhatsApp,
   }
 
