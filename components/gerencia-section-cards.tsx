@@ -1117,7 +1117,15 @@ export function GerenciaSectionCards({
         ) : (
           <>
             <GerenciaSubsection title="Geral">
-              <GerenciaCallsSection data={data.geral.calls} />
+              <GerenciaCallsSection
+                data={data.geral.calls}
+                variant={mode === "employee" ? "employee" : "overview"}
+                from={from}
+                to={to}
+                employeeId={
+                  selectedEmployee ? String(selectedEmployee.id) : undefined
+                }
+              />
             </GerenciaSubsection>
             {data.branches.map(({ branch, data: branchData }) => (
               <GerenciaSubsection
@@ -1125,7 +1133,16 @@ export function GerenciaSectionCards({
                 title={branch.name}
                 variant="cidade"
               >
-                <GerenciaCallsSection data={branchData.calls} />
+                <GerenciaCallsSection
+                  data={branchData.calls}
+                  variant={mode === "employee" ? "employee" : "overview"}
+                  from={from}
+                  to={to}
+                  employeeId={
+                    selectedEmployee ? String(selectedEmployee.id) : undefined
+                  }
+                  branchId={String(branch.id)}
+                />
               </GerenciaSubsection>
             ))}
           </>
