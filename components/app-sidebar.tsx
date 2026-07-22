@@ -24,6 +24,7 @@ import {
   ShoppingCartIcon,
   Building2Icon,
   UsersIcon,
+  PhoneIcon,
 } from "lucide-react"
 
 import { useAuth } from "@/lib/auth-context"
@@ -59,6 +60,11 @@ const navMain = [
     title: "Vendas",
     url: "/dashboard/vendas",
     icon: <ShoppingCartIcon />,
+  },
+  {
+    title: "Ligações",
+    url: "/dashboard/ligacoes",
+    icon: <PhoneIcon />,
   },
 ]
 
