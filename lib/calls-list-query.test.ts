@@ -10,6 +10,7 @@ describe("buildCallsListSearchParams", () => {
       to: "2026-07-22",
     })
     assert.equal(p.get("direction"), "inbound")
+    assert.equal(p.get("isInboundToCompany"), "true")
     assert.equal(p.get("from"), "2026-07-01")
     assert.equal(p.get("outcome"), null)
     assert.equal(p.get("employeeId"), null)
@@ -25,6 +26,7 @@ describe("buildCallsListSearchParams", () => {
     assert.equal(p.get("outcome"), "ANSWERED")
     assert.equal(p.get("employeeId"), "7")
     assert.equal(p.get("direction"), "inbound")
+    assert.equal(p.get("isInboundToCompany"), "true")
   })
 
   it("unanswered card: UNANSWERED + employeeId + branchId", () => {
@@ -37,6 +39,7 @@ describe("buildCallsListSearchParams", () => {
     })
     assert.equal(p.get("outcome"), "UNANSWERED")
     assert.equal(p.get("branchId"), "12")
+    assert.equal(p.get("isInboundToCompany"), "true")
   })
 
   it("geral omits branchId", () => {

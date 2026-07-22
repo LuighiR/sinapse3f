@@ -1,5 +1,10 @@
 export type CallsCardKind = "total" | "answered" | "unanswered"
 
+/** KPI inbound universe: same scope as summary.totalInbound. */
+export function isKpiInboundDirection(direction: string | undefined | null) {
+  return (direction ?? "").toLowerCase() === "inbound"
+}
+
 export function buildCallsListSearchParams(input: {
   kind: CallsCardKind
   from: string
@@ -11,6 +16,7 @@ export function buildCallsListSearchParams(input: {
     from: input.from,
     to: input.to,
     direction: "inbound",
+    isInboundToCompany: "true",
   })
   if (input.branchId) p.set("branchId", input.branchId)
   if (input.kind === "answered") {

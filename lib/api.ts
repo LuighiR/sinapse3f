@@ -270,6 +270,8 @@ export interface KpiOpts {
   employeeId?: string
   direction?: string
   outcome?: string // ANSWERED | UNANSWERED | UNCLASSIFIED
+  /** When "true", matches KPI inbound universe (short numeric destinations). */
+  isInboundToCompany?: string
   callerNumber?: string
   destinationNumber?: string
   durationMin?: string
@@ -296,6 +298,7 @@ function kpiParams(opts: KpiOpts) {
   if (opts.employeeId) p.employeeId = opts.employeeId
   if (opts.direction) p.direction = opts.direction
   if (opts.outcome) p.outcome = opts.outcome
+  if (opts.isInboundToCompany) p.isInboundToCompany = opts.isInboundToCompany
   if (opts.callerNumber) p.callerNumber = opts.callerNumber
   if (opts.destinationNumber) p.destinationNumber = opts.destinationNumber
   if (opts.durationMin) p.durationMin = opts.durationMin

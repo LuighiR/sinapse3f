@@ -36,6 +36,7 @@ import {
   buildCallsExportFilename,
 } from "@/lib/calls-export"
 import { fetchAllCallsDrilldown } from "@/lib/fetch-all-calls-drilldown"
+import { isKpiInboundDirection } from "@/lib/calls-list-query"
 import { useAuth } from "@/lib/auth-context"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -225,6 +226,9 @@ export default function LigacoesPage() {
   const statusFilter = status !== "all" ? status : undefined
   const directionFilter = direction !== "all" ? direction : undefined
   const outcomeFilter = outcome !== "all" ? outcome : undefined
+  const isInboundToCompanyFilter = isKpiInboundDirection(directionFilter)
+    ? "true"
+    : undefined
   const callerFilter = debouncedCallerNumber.trim() || undefined
   const destinationFilter = debouncedDestinationNumber.trim() || undefined
 
@@ -238,6 +242,7 @@ export default function LigacoesPage() {
         statusFilter,
         directionFilter,
         outcomeFilter,
+        isInboundToCompanyFilter,
         callerFilter,
         destinationFilter,
       ].join("|"),
@@ -249,6 +254,7 @@ export default function LigacoesPage() {
       statusFilter,
       directionFilter,
       outcomeFilter,
+      isInboundToCompanyFilter,
       callerFilter,
       destinationFilter,
     ],
@@ -310,6 +316,7 @@ export default function LigacoesPage() {
       status: statusFilter,
       direction: directionFilter,
       outcome: outcomeFilter,
+      isInboundToCompany: isInboundToCompanyFilter,
       callerNumber: callerFilter,
       destinationNumber: destinationFilter,
       page: String(page),
@@ -341,6 +348,7 @@ export default function LigacoesPage() {
     statusFilter,
     directionFilter,
     outcomeFilter,
+    isInboundToCompanyFilter,
     callerFilter,
     destinationFilter,
     page,
@@ -364,6 +372,7 @@ export default function LigacoesPage() {
         status: statusFilter,
         direction: directionFilter,
         outcome: outcomeFilter,
+        isInboundToCompany: isInboundToCompanyFilter,
         callerNumber: callerFilter,
         destinationNumber: destinationFilter,
       })
