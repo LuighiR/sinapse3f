@@ -167,6 +167,16 @@ export function GerenciaCallsSection({
     router.push(`/dashboard/ligacoes?${params}`)
   }
 
+  function handleCardKeyDown(
+    event: React.KeyboardEvent,
+    kind: CallsCardKind,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      if (event.key === " ") event.preventDefault()
+      openList(kind)
+    }
+  }
+
   if (variant === "employee") {
     const attendantTotal = summary.received.count + summary.lost.count
 
@@ -185,7 +195,10 @@ export function GerenciaCallsSection({
         <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
           <Card
             className="@container/card cursor-pointer bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
+            role="button"
+            tabIndex={0}
             onClick={() => openList("total")}
+            onKeyDown={(e) => handleCardKeyDown(e, "total")}
           >
             <CardHeader>
               <CardDescription>Total de ligações</CardDescription>
@@ -209,7 +222,10 @@ export function GerenciaCallsSection({
 
           <Card
             className="@container/card cursor-pointer bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
+            role="button"
+            tabIndex={0}
             onClick={() => openList("answered")}
+            onKeyDown={(e) => handleCardKeyDown(e, "answered")}
           >
             <CardHeader>
               <CardDescription>Atendidas</CardDescription>
@@ -226,7 +242,7 @@ export function GerenciaCallsSection({
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium">
                 <TrendingUpIcon className="size-4" />
-                Do total atendido
+                Do total do atendente
               </div>
               <div className="text-muted-foreground">Clique para ver listagem</div>
             </CardFooter>
@@ -234,7 +250,10 @@ export function GerenciaCallsSection({
 
           <Card
             className="@container/card cursor-pointer bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
+            role="button"
+            tabIndex={0}
             onClick={() => openList("unanswered")}
+            onKeyDown={(e) => handleCardKeyDown(e, "unanswered")}
           >
             <CardHeader>
               <CardDescription>Não atendidas</CardDescription>
@@ -251,7 +270,7 @@ export function GerenciaCallsSection({
             <CardFooter className="flex-col items-start gap-1.5 text-sm">
               <div className="line-clamp-1 flex gap-2 font-medium">
                 <TrendingDownIcon className="size-4" />
-                Do total atendido
+                Do total do atendente
               </div>
               <div className="text-muted-foreground">Clique para ver listagem</div>
             </CardFooter>
