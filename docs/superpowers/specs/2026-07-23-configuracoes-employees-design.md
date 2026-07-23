@@ -86,8 +86,8 @@ A página atual (~680 linhas) é monólito. Extrair:
 **Lista**
 
 - Tabela: nome, filial (nome via `getBranches`), erpId, ramal, chatId, comercial / não comercial, status ativo/inativo.
-- Fetch com `includeInactive=true`.
-- Filtros leves: busca texto, select de filial, toggle “mostrar inativos” (default on para admin).
+- Fetch com `includeInactive=true` (e `search` / `branchId` na query da API quando preenchidos — filtro server-side).
+- Filtros leves: busca texto, select de filial; inativos vêm no fetch admin (sem toggle extra na v1 — a lista já inclui inativos via `includeInactive=true`).
 - Ações: Atualizar, Novo colaborador, Editar.
 
 **Formulários (dialogs, padrão Usuários)**
