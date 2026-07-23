@@ -78,3 +78,47 @@ export function buildUpdateEmployeeBody(
   if (form.isActive !== current.isActive) body.isActive = form.isActive
   return body
 }
+
+export function snapshotFromEmployee(emp: {
+  name: string
+  branchId: number
+  erpId: number
+  extensionNumber: string | null
+  extensionUuid: string | null
+  chatId: string | null
+  isNonCommercial?: boolean
+  isActive: boolean
+}): EmployeeSnapshot {
+  return {
+    name: emp.name,
+    branchId: emp.branchId,
+    erpId: emp.erpId,
+    extensionNumber: emp.extensionNumber,
+    extensionUuid: emp.extensionUuid,
+    chatId: emp.chatId,
+    isNonCommercial: emp.isNonCommercial ?? false,
+    isActive: emp.isActive,
+  }
+}
+
+export function formFromEmployee(emp: {
+  name: string
+  branchId: number
+  erpId: number
+  extensionNumber: string | null
+  extensionUuid: string | null
+  chatId: string | null
+  isNonCommercial?: boolean
+  isActive: boolean
+}): EmployeeFormFields {
+  return {
+    name: emp.name,
+    branchId: emp.branchId,
+    erpId: emp.erpId,
+    extensionNumber: emp.extensionNumber ?? "",
+    extensionUuid: emp.extensionUuid ?? "",
+    chatId: emp.chatId ?? "",
+    isNonCommercial: emp.isNonCommercial ?? false,
+    isActive: emp.isActive,
+  }
+}
