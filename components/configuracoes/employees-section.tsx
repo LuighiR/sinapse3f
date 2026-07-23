@@ -149,8 +149,14 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
     e.preventDefault()
 
     const body = buildCreateEmployeeBody(createForm)
-    if (!body.name || !body.branchId || !body.erpId) {
-      toast.error("Preencha nome, filial e ERP ID para criar o colaborador.")
+    if (
+      !body.name ||
+      !body.branchId ||
+      body.erpId == null ||
+      Number.isNaN(Number(body.erpId)) ||
+      body.erpId === 0
+    ) {
+      toast.error("Preencha nome, filial e ERP ID.")
       return
     }
 
@@ -176,6 +182,11 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
     e.preventDefault()
 
     if (!editing || !editForm) return
+
+    if (!editForm.name.trim()) {
+      toast.error("Preencha o nome do colaborador.")
+      return
+    }
 
     const payload = buildUpdateEmployeeBody(snapshotFromEmployee(editing), editForm)
     if (Object.keys(payload).length === 0) {
@@ -218,6 +229,11 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
     disabled: boolean,
     idPrefix: string,
   ) {
+    const branchSelectValue =
+      form.branchId > 0 && branches.some((branch) => branch.id === form.branchId)
+        ? String(form.branchId)
+        : "__none__"
+
     return (
       <FieldGroup>
         <Field>
@@ -234,14 +250,20 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
         <Field>
           <FieldLabel>Filial</FieldLabel>
           <Select
-            value={form.branchId ? String(form.branchId) : undefined}
-            onValueChange={(value) => onPatch({ branchId: Number(value) })}
+            value={branchSelectValue}
+            onValueChange={(value) => {
+              if (value === "__none__") return
+              onPatch({ branchId: Number(value) })
+            }}
             disabled={disabled}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a filial" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__none__" disabled>
+                Selecione a filial
+              </SelectItem>
               {branches.map((branch) => (
                 <SelectItem key={branch.id} value={String(branch.id)}>
                   {branch.name}
@@ -417,6 +439,7 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
                 })
                 setCreateOpen(true)
               }}
+              disabled={loading || branches.length === 0}
             >
               <PlusIcon className="size-4" />
               Novo colaborador
@@ -424,13 +447,6 @@ export function EmployeesSection({ token, tenantId }: EmployeesSectionProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && error.includes("requires owner or admin membership") ? (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              Seu usuario autenticado nao tem permissao suficiente no backend para
-              administrar colaboradores deste tenant.
-            </div>
-          ) : null}
-
           <div className="flex flex-col gap-3 sm:flex-row">
             <Input
               placeholder="Buscar por nome..."
