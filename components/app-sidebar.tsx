@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 
 import { useAuth } from "@/lib/auth-context"
-import { canManageTenantUsers } from "@/lib/tenant-permissions"
+import { canAccessConfiguracoes } from "@/lib/tenant-permissions"
 
 const navMain = [
   {
@@ -70,7 +70,7 @@ const navMain = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { session } = useAuth()
-  const canManageUsers = canManageTenantUsers(session?.tenantRole)
+  const canAccessSettings = canAccessConfiguracoes(session?.tenantRole)
 
   const user = {
     name: session?.user.name ?? "Usuário",
@@ -79,7 +79,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const navSecondary = [
-    ...(canManageUsers
+    ...(canAccessSettings
       ? [
           {
             title: "Configurações",

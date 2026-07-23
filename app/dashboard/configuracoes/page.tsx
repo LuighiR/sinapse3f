@@ -5,13 +5,19 @@ import { useRouter } from "next/navigation"
 import { ArrowLeftIcon } from "lucide-react"
 
 import { useAuth } from "@/lib/auth-context"
-import { canManageTenantUsers } from "@/lib/tenant-permissions"
+import {
+  canAccessConfiguracoes,
+  canManageEmployees,
+  canManageTenantUsers,
+} from "@/lib/tenant-permissions"
 import { AppSidebar } from "@/components/app-sidebar"
+import { EmployeesSection } from "@/components/configuracoes/employees-section"
 import { TenantUsersSection } from "@/components/configuracoes/tenant-users-section"
 import { SiteHeader } from "@/components/site-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Owner",
@@ -24,10 +30,23 @@ function getRoleLabel(role: string) {
   return ROLE_LABELS[role] ?? role
 }
 
+function getSubtitle(showUsers: boolean, showEmployees: boolean) {
+  if (showUsers && showEmployees) {
+    return "Gerencie usuarios e colaboradores da empresa atual."
+  }
+  if (showUsers) {
+    return "Gerencie usuarios e permissoes da empresa atual."
+  }
+  return "Gerencie colaboradores da empresa atual."
+}
+
 export default function ConfiguracoesPage() {
   const { session } = useAuth()
   const router = useRouter()
-  const canManageUsers = canManageTenantUsers(session?.tenantRole)
+  const canAccess = canAccessConfiguracoes(session?.tenantRole)
+  const showUsers = canManageTenantUsers(session?.tenantRole)
+  const showEmployees = canManageEmployees(session?.tenantRole)
+  const defaultTab = showUsers ? "usuarios" : "colaboradores"
 
   React.useEffect(() => {
     if (!session) {
@@ -35,12 +54,12 @@ export default function ConfiguracoesPage() {
       return
     }
 
-    if (!canManageUsers) {
+    if (!canAccess) {
       router.replace("/dashboard")
     }
-  }, [canManageUsers, router, session])
+  }, [canAccess, router, session])
 
-  if (!session || !canManageUsers) return null
+  if (!session || !canAccess) return null
 
   const roleLabel = getRoleLabel(session.tenantRole)
 
@@ -73,7 +92,7 @@ export default function ConfiguracoesPage() {
                       Configuracoes do tenant
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                      Gerencie usuarios e permissoes da empresa atual.
+                      {getSubtitle(showUsers, showEmployees)}
                     </p>
                   </div>
                 </div>
@@ -83,10 +102,32 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
 
-              <TenantUsersSection
-                token={session.accessToken}
-                tenantId={session.tenantId}
-              />
+              <Tabs defaultValue={defaultTab}>
+                <TabsList>
+                  {showUsers ? (
+                    <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
+                  ) : null}
+                  {showEmployees ? (
+                    <TabsTrigger value="colaboradores">Colaboradores</TabsTrigger>
+                  ) : null}
+                </TabsList>
+                {showUsers ? (
+                  <TabsContent value="usuarios">
+                    <TenantUsersSection
+                      token={session.accessToken}
+                      tenantId={session.tenantId}
+                    />
+                  </TabsContent>
+                ) : null}
+                {showEmployees ? (
+                  <TabsContent value="colaboradores">
+                    <EmployeesSection
+                      token={session.accessToken}
+                      tenantId={session.tenantId}
+                    />
+                  </TabsContent>
+                ) : null}
+              </Tabs>
             </div>
           </div>
         </div>
