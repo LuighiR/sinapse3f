@@ -128,4 +128,3 @@ Regras:
 3. Soft-delete / reativação via `isActive` funciona.
 4. Seletores de KPI (Vendas, Orçamentos, etc.) continuam listando só ativos.
 5. Conflito de `erpId` / uniques (409) aparece em toast legível.
-)
