@@ -1,3 +1,4 @@
+import { buildEmployeesQuery } from "./employee-admin.ts"
 import {
   normalizeEmployee,
   type EmployeeLike,
@@ -193,12 +194,76 @@ export type { EmployeeLike, NormalizedEmployee }
 
 export type Employee = NormalizedEmployee
 
-export async function getEmployees(opts: { token: string; tenantId: string }) {
-  const rows = await api<EmployeeLike[]>("/companies/current/employees", {
-    token: opts.token,
-    tenantId: opts.tenantId,
-  })
+export type CreateEmployeeInput = {
+  name: string
+  branchId: number
+  erpId: number
+  extensionNumber?: string | null
+  extensionUuid?: string | null
+  chatId?: string | null
+  isNonCommercial?: boolean
+  isActive?: boolean
+}
+
+export type UpdateEmployeeInput = {
+  name?: string
+  branchId?: number
+  erpId?: number
+  extensionNumber?: string | null
+  extensionUuid?: string | null
+  chatId?: string | null
+  isNonCommercial?: boolean
+  isActive?: boolean
+}
+
+export async function getEmployees(opts: {
+  token: string
+  tenantId: string
+  includeInactive?: boolean
+  search?: string
+  branchId?: number
+}) {
+  const qs = buildEmployeesQuery({
+    includeInactive: opts.includeInactive,
+    search: opts.search,
+    branchId: opts.branchId,
+  }).toString()
+  const rows = await api<EmployeeLike[]>(
+    `/companies/current/employees${qs ? `?${qs}` : ""}`,
+    {
+      token: opts.token,
+      tenantId: opts.tenantId,
+    },
+  )
   return rows.map(normalizeEmployee)
+}
+
+export function createEmployee(
+  opts: { token: string; tenantId: string } & CreateEmployeeInput,
+) {
+  const { token, tenantId, ...body } = opts
+  return api<EmployeeLike>("/companies/current/employees", {
+    method: "POST",
+    token,
+    tenantId,
+    body: JSON.stringify(body),
+  }).then(normalizeEmployee)
+}
+
+export function updateEmployee(
+  opts: {
+    token: string
+    tenantId: string
+    employeeId: number
+  } & UpdateEmployeeInput,
+) {
+  const { token, tenantId, employeeId, ...body } = opts
+  return api<EmployeeLike>(`/companies/current/employees/${employeeId}`, {
+    method: "PATCH",
+    token,
+    tenantId,
+    body: JSON.stringify(body),
+  }).then(normalizeEmployee)
 }
 
 // ── KPI Types ──
