@@ -6,6 +6,7 @@ export interface EmployeeLike {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
+  isActive?: boolean
   erpId?: number
 }
 
@@ -17,6 +18,7 @@ export interface NormalizedEmployee {
   extensionUuid: string | null
   chatId: string | null
   isNonCommercial?: boolean
+  isActive: boolean
   /** Flat ERP id used as sellerId on every branch KPI request. */
   erpId: number
 }
@@ -32,6 +34,7 @@ export function normalizeEmployee(raw: EmployeeLike): NormalizedEmployee {
     ...(raw.isNonCommercial !== undefined
       ? { isNonCommercial: raw.isNonCommercial }
       : {}),
+    isActive: raw.isActive ?? true,
     erpId: raw.erpId ?? 0,
   }
 }
