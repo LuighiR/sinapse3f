@@ -115,7 +115,8 @@ function formatDuration(seconds: string) {
   return `${mins}:${String(secs).padStart(2, "0")}`
 }
 
-function formatDirection(direction: string) {
+function formatDirection(direction: string | null | undefined) {
+  if (!direction) return "—"
   return DIRECTION_LABELS[direction.toLowerCase()] ?? direction
 }
 
@@ -135,6 +136,7 @@ export default function LigacoesPage() {
   const queryStatus = searchParams.get("status")
   const queryDirection = searchParams.get("direction")
   const queryOutcome = searchParams.get("outcome")
+  const queryWithoutEmployee = searchParams.get("withoutEmployee")
   const queryCallerNumber = searchParams.get("callerNumber")
   const queryDestinationNumber = searchParams.get("destinationNumber")
 
@@ -184,6 +186,9 @@ export default function LigacoesPage() {
     queryDirection ?? "all",
   )
   const [outcome, setOutcome] = React.useState<string>(queryOutcome ?? "all")
+  const [withoutEmployee, setWithoutEmployee] = React.useState(
+    queryWithoutEmployee === "true",
+  )
   const [callerNumber, setCallerNumber] = React.useState(
     queryCallerNumber ?? "",
   )
@@ -222,10 +227,13 @@ export default function LigacoesPage() {
 
   const branchId = selectedBranchId !== "all" ? selectedBranchId : undefined
   const employeeId =
-    selectedEmployeeId !== "all" ? selectedEmployeeId : undefined
+    withoutEmployee || selectedEmployeeId === "all"
+      ? undefined
+      : selectedEmployeeId
   const statusFilter = status !== "all" ? status : undefined
   const directionFilter = direction !== "all" ? direction : undefined
   const outcomeFilter = outcome !== "all" ? outcome : undefined
+  const withoutEmployeeFilter = withoutEmployee ? "true" : undefined
   const isInboundToCompanyFilter = isKpiInboundDirection(directionFilter)
     ? "true"
     : undefined
@@ -242,6 +250,7 @@ export default function LigacoesPage() {
         statusFilter,
         directionFilter,
         outcomeFilter,
+        withoutEmployeeFilter,
         isInboundToCompanyFilter,
         callerFilter,
         destinationFilter,
@@ -254,6 +263,7 @@ export default function LigacoesPage() {
       statusFilter,
       directionFilter,
       outcomeFilter,
+      withoutEmployeeFilter,
       isInboundToCompanyFilter,
       callerFilter,
       destinationFilter,
@@ -291,8 +301,10 @@ export default function LigacoesPage() {
     })
       .then((data) => {
         if (key !== filterOptionsKey.current) return
-        setStatusOptions(data.statuses)
-        setDirectionOptions(data.directions)
+        setStatusOptions(data.statuses.filter((value): value is string => Boolean(value)))
+        setDirectionOptions(
+          data.directions.filter((value): value is string => Boolean(value)),
+        )
       })
       .catch(() => {})
   }, [session, from, to, branchId])
@@ -316,6 +328,7 @@ export default function LigacoesPage() {
       status: statusFilter,
       direction: directionFilter,
       outcome: outcomeFilter,
+      withoutEmployee: withoutEmployeeFilter,
       isInboundToCompany: isInboundToCompanyFilter,
       callerNumber: callerFilter,
       destinationNumber: destinationFilter,
@@ -348,6 +361,7 @@ export default function LigacoesPage() {
     statusFilter,
     directionFilter,
     outcomeFilter,
+    withoutEmployeeFilter,
     isInboundToCompanyFilter,
     callerFilter,
     destinationFilter,
@@ -372,6 +386,7 @@ export default function LigacoesPage() {
         status: statusFilter,
         direction: directionFilter,
         outcome: outcomeFilter,
+        withoutEmployee: withoutEmployeeFilter,
         isInboundToCompany: isInboundToCompanyFilter,
         callerNumber: callerFilter,
         destinationNumber: destinationFilter,
@@ -562,7 +577,11 @@ export default function LigacoesPage() {
 
                 <Select
                   value={selectedEmployeeId}
-                  onValueChange={setSelectedEmployeeId}
+                  onValueChange={(value) => {
+                    setSelectedEmployeeId(value)
+                    if (value !== "all") setWithoutEmployee(false)
+                  }}
+                  disabled={withoutEmployee}
                 >
                   <SelectTrigger className="h-8 w-[200px] text-xs">
                     <SelectValue placeholder="Todos Atendentes" />
@@ -632,6 +651,23 @@ export default function LigacoesPage() {
                         {option.label}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={withoutEmployee ? "true" : "false"}
+                  onValueChange={(value) => {
+                    const enabled = value === "true"
+                    setWithoutEmployee(enabled)
+                    if (enabled) setSelectedEmployeeId("all")
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[200px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">Com ou sem atendente</SelectItem>
+                    <SelectItem value="true">Sem atendente</SelectItem>
                   </SelectContent>
                 </Select>
 

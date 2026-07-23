@@ -513,10 +513,27 @@ Notas para o frontend:
 - nao usar `domainUuid` do client para filtrar chamadas
 - o Domain ID da telefonia fica no backend em `core.branches.telephony_domain_uuid` e nao precisa ser enviado pelo frontend
 
+### Employees — Access Rules
+
+Gestao de employees da empresa atual:
+
+- exige `Authorization: Bearer <jwt>`
+- exige `X-Tenant-Id: <tenant-id>`
+- `GET` (seletores de KPI): qualquer membership ativa do tenant
+- `POST` / `PATCH`: apenas memberships `OWNER`, `ADMIN` ou `MANAGER`
+- soft-delete via `isActive` (sem `DELETE` duro na v1)
+- `dkwWebhook` **nao** e exposto na API publica
+
+Uniques por empresa (`branch.clientId`):
+
+- `erpId` unico
+- `extensionUuid` unico quando preenchido
+- `chatId` unico quando preenchido
+
 ### `GET /companies/current/employees`
 
 Descricao:
-lista funcionarios da empresa atual.
+lista funcionarios da empresa atual. Por padrao retorna somente `isActive=true`.
 
 Headers:
 
@@ -529,6 +546,7 @@ Query Params:
 
 - `branchId` optional, integer — filtra pela filial de **residencia** do employee (`employees.branch_id`)
 - `search` optional, text
+- `includeInactive` optional, boolean — quando `true`, inclui inativos; so e honrado para `OWNER` / `ADMIN` / `MANAGER` (para `VIEWER` a API ignora e continua so ativos)
 
 Exemplo:
 
@@ -548,10 +566,13 @@ Response `200`:
     "extensionNumber": "101",
     "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
     "chatId": "fabiano@empresa.com",
-    "isNonCommercial": false
+    "isNonCommercial": false,
+    "isActive": true
   }
 ]
 ```
+
+Campos opcionais podem ser `null` (`extensionNumber`, `extensionUuid`, `chatId`).
 
 Notas:
 
@@ -576,8 +597,141 @@ Exemplo — Shaiane (`erpId = 42754`):
 
 Importante:
 
-- Calls: use `extensionUuid` / `extensionNumber` (nao `sellerId`)
+- Calls: use `employeeId` (preferencial) ou `extensionUuid` / `extensionNumber` (nao `sellerId`)
 - WhatsApp: use `chatId` (`branchId` em WhatsApp e ignorado por enquanto)
+- Seletores de KPI devem chamar o `GET` **sem** `includeInactive` (so ativos)
+- Tela admin de cadastro pode usar `includeInactive=true` (manager+)
+
+### `POST /companies/current/employees`
+
+Descricao:
+cria um funcionario na empresa atual.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Request body:
+
+```json
+{
+  "name": "Nova Pessoa",
+  "branchId": 1,
+  "erpId": 42754,
+  "extensionNumber": "102",
+  "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
+  "chatId": "pessoa@empresa.com",
+  "isNonCommercial": false,
+  "isActive": true
+}
+```
+
+Campos:
+
+- `name` required
+- `branchId` required — deve pertencer ao client do tenant ativo
+- `erpId` required — integer seguro (mesmo dominio de `sellerId`)
+- `extensionNumber` optional → `null` se omitido/vazio
+- `extensionUuid` optional → `null` se omitido/vazio
+- `chatId` optional → `null` se omitido/vazio
+- `isNonCommercial` optional, default `false`
+- `isActive` optional, default `true`
+
+Response `201`:
+
+```json
+{
+  "id": 13,
+  "erpId": 42754,
+  "name": "Nova Pessoa",
+  "branchId": 1,
+  "extensionNumber": "102",
+  "extensionUuid": "3c5f7f91-6b21-4b4d-a7a0-2d5f8e7a1234",
+  "chatId": "pessoa@empresa.com",
+  "isNonCommercial": false,
+  "isActive": true
+}
+```
+
+Response `400`:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid employee payload"
+}
+```
+
+Response `403`:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Employee administration requires owner, admin, or manager membership"
+}
+```
+
+Response `409`:
+
+```json
+{
+  "statusCode": 409,
+  "message": "Employee erpId already in use for this company"
+}
+```
+
+### `PATCH /companies/current/employees/:employeeId`
+
+Descricao:
+atualiza um funcionario do tenant ativo. Soft-delete / reativacao via `isActive`.
+
+Headers:
+
+```http
+Authorization: Bearer <jwt>
+X-Tenant-Id: <tenant-id>
+```
+
+Path Params:
+
+- `employeeId` required, integer
+
+Request body (parcial; pelo menos um campo):
+
+```json
+{
+  "name": "Nome Atualizado",
+  "branchId": 2,
+  "erpId": 111,
+  "extensionNumber": null,
+  "extensionUuid": null,
+  "chatId": "novo@empresa.com",
+  "isNonCommercial": true,
+  "isActive": false
+}
+```
+
+Regras:
+
+- campo omitido = preserva
+- `null` explicito em `extensionNumber` / `extensionUuid` / `chatId` limpa o valor
+- `isActive: false` desativa; `isActive: true` reativa
+
+Response `200`: shape do employee atualizado.
+
+Response `404`:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Employee not found"
+}
+```
+
+Tambem pode responder `400`, `403` e `409` com as mesmas regras do `POST`.
 
 ## Budgets KPI
 
@@ -1488,14 +1642,15 @@ Calls aceitam:
 - `extensionUuid` optional (compatibilidade)
 - `extensionNumber` optional (compatibilidade)
 
-As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando somente chamadas `inbound` para ramais numericos curtos (`2` a `5` digitos). A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
+As ligacoes sao calculadas a partir de `raw.ferraco_calls`, considerando todas as chamadas com `direction = inbound`. A importacao casa `raw.ferraco_calls.domain_uuid` com `core.branches.telephony_domain_uuid`; `core.sinapse_clients` continua sendo o cliente/tenant backend, nao a filial.
 
 Classificacao operacional:
 
 - `status` e `direction` brutos da central sao preservados em `core.call_facts`
-- `is_received = true` quando inbound valida com `status = answered` e nao for fila-only
-- `is_lost = true` quando inbound valida com `status` em `missed` / `no_answer` / `no_answered`, ou quando `status = answered` sem `extension_uuid` e destino com exatamente `3` digitos (fila/URA sem atendimento humano)
+- `is_received = true` quando inbound com `status = answered` e nao for fila-only
+- `is_lost = true` quando inbound com `status` em `missed` / `no_answer` / `no_answered`, ou quando `status = answered` sem `extension_uuid` e destino com exatamente `3` digitos (fila/URA sem atendimento humano)
 - destino com `4+` digitos sem `extension_uuid` e `status = answered` continua como recebida
+- funcionarios marcados como nao comerciais tambem entram nas contagens; o lookup de employee serve so para nome/label
 
 Quando `branchId` e informado, a API filtra diretamente por `core.call_facts.branch_id`, salvo durante a normalizacao.
 Quando `employeeId` e informado, a API resolve o funcionario do tenant e filtra pelas suas extensoes.
@@ -1518,9 +1673,10 @@ No `GET /kpis/calls/summary`, o escopo e misto:
 
 Mapeamento sugerido dos cards para o relatorio completo:
 
-- Total: `direction=inbound&isInboundToCompany=true` + periodo/filial
-- Atendidas: `direction=inbound&isInboundToCompany=true&outcome=ANSWERED&employeeId=...`
-- Nao atendidas: `direction=inbound&isInboundToCompany=true&outcome=UNANSWERED&employeeId=...`
+- Total: `direction=inbound` + periodo/filial
+- Atendidas: `direction=inbound&outcome=ANSWERED&employeeId=...`
+- Nao atendidas: `direction=inbound&outcome=UNANSWERED&employeeId=...`
+- Nao atendidas sem atendente: `direction=inbound&outcome=UNANSWERED&withoutEmployee=true` (card: `summary.lostWithoutEmployee.count`)
 
 ### `POST /kpis/calls/refresh`
 
@@ -1594,6 +1750,9 @@ Response `200`:
   "lost": {
     "count": 4945
   },
+  "lostWithoutEmployee": {
+    "count": 812
+  },
   "totalInbound": {
     "count": 11686
   },
@@ -1606,6 +1765,11 @@ Response `200`:
   }
 }
 ```
+
+Notas:
+
+- `lostWithoutEmployee.count` e o total de ligacoes inbound perdidas (`is_lost`) que nao resolvem para um Employee unico (mesmo criterio do filtro `withoutEmployee` no drilldown)
+- o card deve abrir `GET /kpis/calls/drilldown?direction=inbound&outcome=UNANSWERED&withoutEmployee=true`
 
 ### `GET /kpis/calls/hourly`
 
@@ -1705,11 +1869,11 @@ Query Params:
 
 - `from`, `to` required
 - `branchId`, `employeeId`, `extensionUuid`, `extensionNumber` optional
+- `withoutEmployee` optional (`true`/`false`): lista apenas ligacoes que nao resolvem para um Employee unico; nao combina com `employeeId`, `extensionUuid` ou `extensionNumber`
 - `status`, `direction` optional (valores brutos da central; nao sao enums rigidos)
 - `callerNumber`, `destinationNumber` optional (contains, case-insensitive)
 - `durationMin`, `durationMax` optional (segundos, nao negativos; `durationMin <= durationMax`)
 - `outcome` optional: `ANSWERED` | `UNANSWERED` | `UNCLASSIFIED`
-- `isInboundToCompany` optional: `true` | `false` — quando `true`, restringe ao universo do KPI (`totalInbound`: inbound para ramais numericos curtos 2–5 digitos). Use junto com `direction=inbound` para o total da listagem bater com o card Total
 - `page` optional (default `1`, minimo `1`)
 - `pageSize` optional (default `50`, maximo `100`)
 
@@ -2474,6 +2638,34 @@ curl -X PATCH "http://localhost:3000/tenant-users/u-viewer" ^
   -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
   -H "Content-Type: application/json" ^
   -d "{\"name\":\"Viewer Updated\",\"password\":\"after-123\",\"role\":\"MANAGER\",\"isActive\":true,\"membershipIsActive\":false}"
+```
+
+### Employees List
+
+```bash
+curl -X GET "http://localhost:3000/companies/current/employees?includeInactive=true" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev"
+```
+
+### Employees Create
+
+```bash
+curl -X POST "http://localhost:3000/companies/current/employees" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"name\":\"Nova Pessoa\",\"branchId\":1,\"erpId\":42754,\"chatId\":\"pessoa@empresa.com\"}"
+```
+
+### Employees Update
+
+```bash
+curl -X PATCH "http://localhost:3000/companies/current/employees/12" ^
+  -H "Authorization: Bearer <jwt>" ^
+  -H "X-Tenant-Id: tenant-ferracosul-kpi-dev" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"isActive\":false}"
 ```
 
 ### Budget Summary

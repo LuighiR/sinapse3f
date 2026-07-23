@@ -42,6 +42,21 @@ describe("buildCallsListSearchParams", () => {
     assert.equal(p.get("isInboundToCompany"), "true")
   })
 
+  it("unansweredWithoutEmployee: UNANSWERED + withoutEmployee, no employeeId", () => {
+    const p = buildCallsListSearchParams({
+      kind: "unansweredWithoutEmployee",
+      from: "2026-07-01",
+      to: "2026-07-22",
+      employeeId: "7",
+      branchId: "12",
+    })
+    assert.equal(p.get("outcome"), "UNANSWERED")
+    assert.equal(p.get("withoutEmployee"), "true")
+    assert.equal(p.get("employeeId"), null)
+    assert.equal(p.get("branchId"), "12")
+    assert.equal(p.get("direction"), "inbound")
+  })
+
   it("geral omits branchId", () => {
     const p = buildCallsListSearchParams({
       kind: "total",

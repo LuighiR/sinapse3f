@@ -272,6 +272,8 @@ export interface KpiOpts {
   outcome?: string // ANSWERED | UNANSWERED | UNCLASSIFIED
   /** When "true", matches KPI inbound universe (short numeric destinations). */
   isInboundToCompany?: string
+  /** When "true", only calls that do not resolve to a unique Employee. */
+  withoutEmployee?: string
   callerNumber?: string
   destinationNumber?: string
   durationMin?: string
@@ -299,6 +301,7 @@ function kpiParams(opts: KpiOpts) {
   if (opts.direction) p.direction = opts.direction
   if (opts.outcome) p.outcome = opts.outcome
   if (opts.isInboundToCompany) p.isInboundToCompany = opts.isInboundToCompany
+  if (opts.withoutEmployee) p.withoutEmployee = opts.withoutEmployee
   if (opts.callerNumber) p.callerNumber = opts.callerNumber
   if (opts.destinationNumber) p.destinationNumber = opts.destinationNumber
   if (opts.durationMin) p.durationMin = opts.durationMin
@@ -548,6 +551,8 @@ export interface CallsSummary {
   period: KpiPeriod
   received: { count: number }
   lost: { count: number }
+  /** Inbound lost that do not resolve to a unique Employee. */
+  lostWithoutEmployee: { count: number }
   totalInbound: { count: number }
   telemarketingOpenBudgets: { count: number }
   peakHour: { hour: string; totalInboundCount: number }
@@ -632,11 +637,18 @@ export function refreshCalls(opts: Pick<KpiOpts, "token" | "tenantId" | "from" |
 
 // ── Calls KPI Fetchers ──
 
-export function getCallsSummary(opts: KpiOpts) {
-  return api<CallsSummary>(`/kpis/calls/summary?${kpiParams(opts)}`, {
-    token: opts.token,
-    tenantId: opts.tenantId,
-  })
+export async function getCallsSummary(opts: KpiOpts) {
+  const summary = await api<CallsSummary & { lostWithoutEmployee?: { count: number } }>(
+    `/kpis/calls/summary?${kpiParams(opts)}`,
+    {
+      token: opts.token,
+      tenantId: opts.tenantId,
+    },
+  )
+  return {
+    ...summary,
+    lostWithoutEmployee: summary.lostWithoutEmployee ?? { count: 0 },
+  }
 }
 
 export function getCallsHourly(opts: KpiOpts) {

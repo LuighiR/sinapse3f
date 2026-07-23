@@ -5,6 +5,8 @@ import {
   format,
   startOfMonth,
   endOfMonth,
+  isFuture,
+  isToday,
 } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
@@ -55,6 +57,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 
 function toYMD(d: Date) {
@@ -747,7 +755,10 @@ export function GerenciaSectionCards({
   mode = "overview",
 }: GerenciaSectionCardsProps) {
   const { session } = useAuth()
+  const [filterMode, setFilterMode] = React.useState<"month" | "range">("month")
   const [selectedMonth, setSelectedMonth] = React.useState(() => new Date())
+  const [rangeFrom, setRangeFrom] = React.useState<Date | undefined>(undefined)
+  const [rangeTo, setRangeTo] = React.useState<Date | undefined>(undefined)
   const [data, setData] = React.useState<FetchGerenciaKpisResult | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
@@ -756,10 +767,17 @@ export function GerenciaSectionCards({
   const [employees, setEmployees] = React.useState<Employee[]>([])
 
   const { from, to } = React.useMemo(() => {
-    const start = startOfMonth(selectedMonth)
-    const end = clampToday(endOfMonth(selectedMonth))
-    return { from: toYMD(start), to: toYMD(end) }
-  }, [selectedMonth])
+    if (filterMode === "month") {
+      const start = startOfMonth(selectedMonth)
+      const end = clampToday(endOfMonth(selectedMonth))
+      return { from: toYMD(start), to: toYMD(end) }
+    }
+    if (rangeFrom && rangeTo) {
+      return { from: toYMD(rangeFrom), to: toYMD(rangeTo) }
+    }
+    const now = new Date()
+    return { from: toYMD(startOfMonth(now)), to: toYMD(now) }
+  }, [filterMode, selectedMonth, rangeFrom, rangeTo])
 
   const selectedEmployee = React.useMemo(
     () => employees.find((e) => String(e.id) === selectedEmployeeId) ?? null,
@@ -911,40 +929,87 @@ export function GerenciaSectionCards({
   return (
     <div className="flex flex-col gap-6 px-4 lg:px-6">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            onClick={() =>
-              setSelectedMonth(
-                (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-              )
-            }
-          >
-            <span className="sr-only">Mês anterior</span>
-            <CalendarIcon className="size-4" />
-            <span className="text-xs">‹</span>
-          </Button>
-          <span className="min-w-[120px] text-center text-sm font-medium capitalize">
-            {periodLabel}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-8"
-            disabled={isCurrentMonth}
-            onClick={() =>
-              setSelectedMonth(
-                (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-              )
-            }
-          >
-            <span className="sr-only">Próximo mês</span>
-            <CalendarIcon className="size-4" />
-            <span className="text-xs">›</span>
-          </Button>
-        </div>
+        <Select
+          value={filterMode}
+          onValueChange={(v) => setFilterMode(v as "month" | "range")}
+        >
+          <SelectTrigger className="w-[130px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="month">Mês</SelectItem>
+            <SelectItem value="range">Período</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {filterMode === "month" ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              onClick={() =>
+                setSelectedMonth(
+                  (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+                )
+              }
+            >
+              <span className="sr-only">Mês anterior</span>
+              <CalendarIcon className="size-4" />
+              <span className="text-xs">‹</span>
+            </Button>
+            <span className="min-w-[120px] text-center text-sm font-medium capitalize">
+              {periodLabel}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              disabled={isCurrentMonth}
+              onClick={() =>
+                setSelectedMonth(
+                  (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+                )
+              }
+            >
+              <span className="sr-only">Próximo mês</span>
+              <CalendarIcon className="size-4" />
+              <span className="text-xs">›</span>
+            </Button>
+          </div>
+        ) : (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2 font-normal">
+                <CalendarIcon className="size-4" />
+                {rangeFrom && rangeTo
+                  ? `${format(rangeFrom, "dd/MM/yyyy")} — ${format(rangeTo, "dd/MM/yyyy")}`
+                  : "Selecione o período"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                locale={ptBR}
+                selected={
+                  rangeFrom
+                    ? { from: rangeFrom, to: rangeTo }
+                    : undefined
+                }
+                onSelect={(range) => {
+                  setRangeFrom(range?.from)
+                  setRangeTo(range?.to)
+                }}
+                disabled={(date) => isFuture(date) && !isToday(date)}
+                numberOfMonths={2}
+                defaultMonth={
+                  rangeFrom ??
+                  new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)
+                }
+              />
+            </PopoverContent>
+          </Popover>
+        )}
 
         <span className="text-xs text-muted-foreground">
           {from} → {to}

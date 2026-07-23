@@ -161,7 +161,10 @@ export function GerenciaCallsSection({
       kind,
       from,
       to,
-      employeeId: kind === "total" ? undefined : employeeId,
+      employeeId:
+        kind === "total" || kind === "unansweredWithoutEmployee"
+          ? undefined
+          : employeeId,
       branchId,
     })
     router.push(`/dashboard/ligacoes?${params}`)
@@ -344,12 +347,51 @@ export function GerenciaCallsSection({
       ? ((summary.received.count / summary.totalInbound.count) * 100).toFixed(1)
       : "0"
 
+  const lostWithoutEmployeeCount = summary.lostWithoutEmployee.count
+  const lostWithoutEmployeePct =
+    summary.lost.count > 0
+      ? ((lostWithoutEmployeeCount / summary.lost.count) * 100).toFixed(1)
+      : "0"
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
-        <Card className="@container/card bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60">
+      <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+        <Card
+          className="@container/card cursor-pointer bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60"
+          role="button"
+          tabIndex={0}
+          onClick={() => openList("total")}
+          onKeyDown={(e) => handleCardKeyDown(e, "total")}
+        >
           <CardHeader>
-            <CardDescription>Ligações Perdidas</CardDescription>
+            <CardDescription>Total de ligações</CardDescription>
+            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+              {formatNumber(summary.totalInbound.count)}
+            </CardTitle>
+            <CardAction>
+              <Badge variant="outline">
+                <PhoneIcon className="size-3" />
+                Inbound
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <div className="line-clamp-1 flex gap-2 font-medium">
+              Todas as ligações recebidas
+            </div>
+            <div className="text-muted-foreground">Clique para ver listagem</div>
+          </CardFooter>
+        </Card>
+
+        <Card
+          className="@container/card cursor-pointer bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
+          role="button"
+          tabIndex={0}
+          onClick={() => openList("unanswered")}
+          onKeyDown={(e) => handleCardKeyDown(e, "unanswered")}
+        >
+          <CardHeader>
+            <CardDescription>Ligações Não Atendidas</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
               {formatNumber(summary.lost.count)}
             </CardTitle>
@@ -365,11 +407,44 @@ export function GerenciaCallsSection({
               <TrendingDownIcon className="size-4" />
               Do total inbound
             </div>
-            <div className="text-muted-foreground">Período consolidado</div>
+            <div className="text-muted-foreground">Clique para ver listagem</div>
           </CardFooter>
         </Card>
 
-        <Card className="@container/card bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60">
+        <Card
+          className="@container/card cursor-pointer bg-orange-50 dark:bg-orange-950/30 border-orange-200/60 dark:border-orange-800/60"
+          role="button"
+          tabIndex={0}
+          onClick={() => openList("unansweredWithoutEmployee")}
+          onKeyDown={(e) => handleCardKeyDown(e, "unansweredWithoutEmployee")}
+        >
+          <CardHeader>
+            <CardDescription>Não atendidas sem Atendentes</CardDescription>
+            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+              {formatNumber(lostWithoutEmployeeCount)}
+            </CardTitle>
+            <CardAction>
+              <Badge variant="outline">
+                <UsersIcon className="size-3" />
+                {lostWithoutEmployeePct}%
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <div className="line-clamp-1 flex gap-2 font-medium">
+              Sem employee unico
+            </div>
+            <div className="text-muted-foreground">Clique para ver listagem</div>
+          </CardFooter>
+        </Card>
+
+        <Card
+          className="@container/card cursor-pointer bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200/60 dark:border-emerald-800/60"
+          role="button"
+          tabIndex={0}
+          onClick={() => openList("answered")}
+          onKeyDown={(e) => handleCardKeyDown(e, "answered")}
+        >
           <CardHeader>
             <CardDescription>Ligações Recebidas</CardDescription>
             <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
@@ -387,7 +462,7 @@ export function GerenciaCallsSection({
               <TrendingUpIcon className="size-4" />
               Do total inbound
             </div>
-            <div className="text-muted-foreground">Período consolidado</div>
+            <div className="text-muted-foreground">Clique para ver listagem</div>
           </CardFooter>
         </Card>
 

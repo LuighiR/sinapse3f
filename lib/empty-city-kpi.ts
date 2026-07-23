@@ -44,6 +44,7 @@ export function emptyCityKpi(from: string, to: string): CityKpiData {
         period,
         received: zeroCount,
         lost: zeroCount,
+        lostWithoutEmployee: zeroCount,
         totalInbound: zeroCount,
         telemarketingOpenBudgets: zeroCount,
         peakHour: { hour: "", totalInboundCount: 0 },

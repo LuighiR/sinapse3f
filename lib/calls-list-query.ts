@@ -1,4 +1,8 @@
-export type CallsCardKind = "total" | "answered" | "unanswered"
+export type CallsCardKind =
+  | "total"
+  | "answered"
+  | "unanswered"
+  | "unansweredWithoutEmployee"
 
 /** KPI inbound universe: same scope as summary.totalInbound. */
 export function isKpiInboundDirection(direction: string | undefined | null) {
@@ -26,6 +30,10 @@ export function buildCallsListSearchParams(input: {
   if (input.kind === "unanswered") {
     p.set("outcome", "UNANSWERED")
     if (input.employeeId) p.set("employeeId", input.employeeId)
+  }
+  if (input.kind === "unansweredWithoutEmployee") {
+    p.set("outcome", "UNANSWERED")
+    p.set("withoutEmployee", "true")
   }
   return p
 }
