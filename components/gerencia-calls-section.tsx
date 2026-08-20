@@ -252,6 +252,35 @@ export function GerenciaCallsSection({
           </Card>
 
           <Card
+            className="@container/card cursor-pointer bg-violet-50 dark:bg-violet-950/30 border-violet-200/60 dark:border-violet-800/60"
+            role="button"
+            tabIndex={0}
+            onClick={() => openList("unansweredAnswered")}
+            onKeyDown={(e) => handleCardKeyDown(e, "unansweredAnswered")}
+          >
+            <CardHeader>
+              <CardDescription>Ligações não atendidas</CardDescription>
+              <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                {formatNumber(data.unansweredAnswered.count)}
+              </CardTitle>
+              <CardAction>
+                <Badge variant="outline">
+                  <PhoneMissedIcon className="size-3" />
+                  {attendantTotal > 0
+                    ? `${((data.unansweredAnswered.count / attendantTotal) * 100).toFixed(1)}%`
+                    : "0%"}
+                </Badge>
+              </CardAction>
+            </CardHeader>
+            <CardFooter className="flex-col items-start gap-1.5 text-sm">
+              <div className="line-clamp-1 flex gap-2 font-medium">
+                Status answered · Não atendidas
+              </div>
+              <div className="text-muted-foreground">Clique para ver listagem</div>
+            </CardFooter>
+          </Card>
+
+          <Card
             className="@container/card cursor-pointer bg-rose-50 dark:bg-rose-950/30 border-rose-200/60 dark:border-rose-800/60"
             role="button"
             tabIndex={0}
@@ -461,6 +490,35 @@ export function GerenciaCallsSection({
             <div className="line-clamp-1 flex gap-2 font-medium">
               <TrendingUpIcon className="size-4" />
               Do total inbound
+            </div>
+            <div className="text-muted-foreground">Clique para ver listagem</div>
+          </CardFooter>
+        </Card>
+
+        <Card
+          className="@container/card cursor-pointer bg-violet-50 dark:bg-violet-950/30 border-violet-200/60 dark:border-violet-800/60"
+          role="button"
+          tabIndex={0}
+          onClick={() => openList("unansweredAnswered")}
+          onKeyDown={(e) => handleCardKeyDown(e, "unansweredAnswered")}
+        >
+          <CardHeader>
+            <CardDescription>Ligações não atendidas</CardDescription>
+            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+              {formatNumber(data.unansweredAnswered.count)}
+            </CardTitle>
+            <CardAction>
+              <Badge variant="outline">
+                <PhoneMissedIcon className="size-3" />
+                {summary.totalInbound.count > 0
+                  ? `${((data.unansweredAnswered.count / summary.totalInbound.count) * 100).toFixed(1)}%`
+                  : "0%"}
+              </Badge>
+            </CardAction>
+          </CardHeader>
+          <CardFooter className="flex-col items-start gap-1.5 text-sm">
+            <div className="line-clamp-1 flex gap-2 font-medium">
+              Status answered · Não atendidas
             </div>
             <div className="text-muted-foreground">Clique para ver listagem</div>
           </CardFooter>

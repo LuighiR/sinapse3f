@@ -218,6 +218,7 @@ export function aggregateCityKpis(
   let callsReceived = 0
   let callsLost = 0
   let callsLostWithoutEmployee = 0
+  let callsUnansweredAnswered = 0
   let callsTotalInbound = 0
   let callsTelemarketing = 0
 
@@ -261,6 +262,7 @@ export function aggregateCityKpis(
     callsReceived += city.calls.summary.received.count
     callsLost += city.calls.summary.lost.count
     callsLostWithoutEmployee += city.calls.summary.lostWithoutEmployee.count
+    callsUnansweredAnswered += city.calls.unansweredAnswered.count
     callsTotalInbound += city.calls.summary.totalInbound.count
     callsTelemarketing += city.calls.summary.telemarketingOpenBudgets.count
 
@@ -327,6 +329,7 @@ export function aggregateCityKpis(
         telemarketingOpenBudgets: { count: callsTelemarketing },
         peakHour: peakHourFrom(mergedHourly),
       },
+      unansweredAnswered: { count: callsUnansweredAnswered },
       hourly: { period, rows: mergedHourly },
       ranking: { period, rows: mergeCallsRanking(callsRankingLists) },
       comparison: { period, rows: mergeCallsComparison(callsComparisonLists) },

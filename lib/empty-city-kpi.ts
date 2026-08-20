@@ -49,6 +49,7 @@ export function emptyCityKpi(from: string, to: string): CityKpiData {
         telemarketingOpenBudgets: zeroCount,
         peakHour: { hour: "", totalInboundCount: 0 },
       },
+      unansweredAnswered: zeroCount,
       hourly: { period, rows: [] },
       ranking: { period, rows: [] },
       comparison: { period, rows: [] },

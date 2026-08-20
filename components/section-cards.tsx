@@ -887,7 +887,7 @@ export function SectionCards() {
         </div>
 
         {/* Ligações */}
-        <CallsSection refreshKey={refreshKey} from={from} to={to} extensionUuid={extensionUuid} extensionNumber={extensionNumber} branchId={branchId} />
+        <CallsSection refreshKey={refreshKey} from={from} to={to} employeeId={selectedEmployeeId || undefined} extensionUuid={extensionUuid} extensionNumber={extensionNumber} branchId={branchId} />
 
         {/* WhatsApp */}
         <WhatsAppSection refreshKey={refreshKey} from={from} to={to} chatId={chatId} sellerId={sellerId} branchId={branchId} />

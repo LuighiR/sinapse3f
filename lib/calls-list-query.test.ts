@@ -57,6 +57,34 @@ describe("buildCallsListSearchParams", () => {
     assert.equal(p.get("direction"), "inbound")
   })
 
+  it("unansweredAnswered card: same as answered plus status answered and outcome UNANSWERED", () => {
+    const p = buildCallsListSearchParams({
+      kind: "unansweredAnswered",
+      from: "2026-07-01",
+      to: "2026-07-22",
+      employeeId: "7",
+      branchId: "12",
+    })
+    assert.equal(p.get("status"), "answered")
+    assert.equal(p.get("outcome"), "UNANSWERED")
+    assert.equal(p.get("employeeId"), "7")
+    assert.equal(p.get("branchId"), "12")
+    assert.equal(p.get("direction"), "inbound")
+    assert.equal(p.get("isInboundToCompany"), "true")
+    assert.equal(p.get("withoutEmployee"), null)
+  })
+
+  it("unansweredAnswered without employee omits employeeId", () => {
+    const p = buildCallsListSearchParams({
+      kind: "unansweredAnswered",
+      from: "2026-07-01",
+      to: "2026-07-22",
+    })
+    assert.equal(p.get("status"), "answered")
+    assert.equal(p.get("outcome"), "UNANSWERED")
+    assert.equal(p.get("employeeId"), null)
+  })
+
   it("geral omits branchId", () => {
     const p = buildCallsListSearchParams({
       kind: "total",

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   Bar,
   BarChart,
@@ -59,12 +60,17 @@ import {
   getCallsHourly,
   getCallsAgentsRanking,
   getCallsHourlyComparison,
+  getCallsDrilldown,
   type CallsSummary,
   type CallsHourly,
   type CallsAgentsRanking,
   type CallsHourlyComparison,
   type KpiOpts,
 } from "@/lib/api"
+import {
+  buildCallsListSearchParams,
+  unansweredAnsweredFilters,
+} from "@/lib/calls-list-query"
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value)
@@ -486,6 +492,7 @@ export function CallsSection({
   refreshKey = 0,
   from,
   to,
+  employeeId,
   extensionUuid,
   extensionNumber,
   branchId,
@@ -493,14 +500,17 @@ export function CallsSection({
   refreshKey?: number
   from: string
   to: string
+  employeeId?: string
   extensionUuid?: string
   extensionNumber?: string
   branchId?: string
 }) {
   const { session } = useAuth()
+  const router = useRouter()
   const [summary, setSummary] = React.useState<CallsSummary | null>(null)
   const [hourly, setHourly] = React.useState<CallsHourly | null>(null)
   const [ranking, setRanking] = React.useState<CallsAgentsRanking | null>(null)
+  const [unansweredAnsweredCount, setUnansweredAnsweredCount] = React.useState(0)
   const [loading, setLoading] = React.useState(true)
 
   const [drilldownOpen, setDrilldownOpen] = React.useState(false)
@@ -515,12 +525,35 @@ export function CallsSection({
       getCallsSummary(opts).then(setSummary).catch((e) => console.error("[KPI] calls summary", e)),
       getCallsHourly(opts).then(setHourly).catch((e) => console.error("[KPI] calls hourly", e)),
       getCallsAgentsRanking(opts).then(setRanking).catch((e) => console.error("[KPI] calls ranking", e)),
+      getCallsDrilldown({
+        token: session.accessToken,
+        tenantId: session.tenantId,
+        ...unansweredAnsweredFilters({ from, to, employeeId, branchId }),
+        page: "1",
+        pageSize: "1",
+      })
+        .then((data) => setUnansweredAnsweredCount(data.pagination.total))
+        .catch((e) => {
+          console.error("[KPI] unanswered answered count", e)
+          setUnansweredAnsweredCount(0)
+        }),
     ]).finally(() => setLoading(false))
-  }, [session, from, to, refreshKey, extensionUuid, extensionNumber, branchId])
+  }, [session, from, to, refreshKey, employeeId, extensionUuid, extensionNumber, branchId])
 
   function openDrilldown(kind: CallsDrilldownKind) {
     setDrilldownKind(kind)
     setDrilldownOpen(true)
+  }
+
+  function openUnansweredAnsweredList() {
+    const params = buildCallsListSearchParams({
+      kind: "unansweredAnswered",
+      from,
+      to,
+      employeeId,
+      branchId,
+    })
+    router.push(`/dashboard/ligacoes?${params}`)
   }
 
   const skeletons = Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
@@ -613,6 +646,43 @@ export function CallsSection({
                   </div>
                   <div className="text-muted-foreground">
                     Clique para ver por hora
+                  </div>
+                </CardFooter>
+              </Card>
+
+              {/* Ligações não atendidas: status answered + outcome UNANSWERED */}
+              <Card
+                className="@container/card cursor-pointer transition-shadow hover:shadow-md bg-violet-50 dark:bg-violet-950/30 border-violet-200/60 dark:border-violet-800/60"
+                role="button"
+                tabIndex={0}
+                onClick={openUnansweredAnsweredList}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    if (event.key === " ") event.preventDefault()
+                    openUnansweredAnsweredList()
+                  }
+                }}
+              >
+                <CardHeader>
+                  <CardDescription>Ligações não atendidas</CardDescription>
+                  <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                    {formatNumber(unansweredAnsweredCount)}
+                  </CardTitle>
+                  <CardAction>
+                    <Badge variant="outline">
+                      <PhoneMissedIcon className="size-3" />
+                      {summary.totalInbound.count > 0
+                        ? `${((unansweredAnsweredCount / summary.totalInbound.count) * 100).toFixed(1)}%`
+                        : "0%"}
+                    </Badge>
+                  </CardAction>
+                </CardHeader>
+                <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                  <div className="line-clamp-1 flex gap-2 font-medium">
+                    Status answered · Não atendidas
+                  </div>
+                  <div className="text-muted-foreground">
+                    Clique para ver listagem
                   </div>
                 </CardFooter>
               </Card>

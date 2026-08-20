@@ -7,6 +7,7 @@ import {
   getCallsHourly,
   getCallsAgentsRanking,
   getCallsHourlyComparison,
+  getCallsDrilldown,
   getWhatsAppCities,
   getWhatsAppSummary,
   getWhatsAppAgentsRanking,
@@ -28,6 +29,7 @@ import type {
 } from "./gerencia-kpi-types.ts"
 import { aggregateCityKpis } from "./aggregate-city-kpis.ts"
 import { emptyCityKpi } from "./empty-city-kpi.ts"
+import { unansweredAnsweredFilters } from "./calls-list-query.ts"
 import {
   sellerIdForBranch,
   type NormalizedEmployee,
@@ -96,15 +98,39 @@ async function fetchCallsSection(opts: KpiOpts): Promise<CallsKpiData> {
   const empty = emptyCityKpi(opts.from, opts.to).calls
   try {
     const skipRanking = Boolean(cOpts.employeeId)
-    const [summary, hourly, ranking, comparison] = await Promise.all([
-      getCallsSummary(cOpts),
-      getCallsHourly(cOpts),
-      skipRanking
-        ? Promise.resolve(empty.ranking)
-        : getCallsAgentsRanking(cOpts),
-      getCallsHourlyComparison(cOpts),
-    ])
-    return { summary, hourly, ranking, comparison }
+    const [summary, hourly, ranking, comparison, unansweredAnsweredRes] =
+      await Promise.all([
+        getCallsSummary(cOpts),
+        getCallsHourly(cOpts),
+        skipRanking
+          ? Promise.resolve(empty.ranking)
+          : getCallsAgentsRanking(cOpts),
+        getCallsHourlyComparison(cOpts),
+        getCallsDrilldown({
+          token: cOpts.token,
+          tenantId: cOpts.tenantId,
+          ...unansweredAnsweredFilters({
+            from: cOpts.from,
+            to: cOpts.to,
+            employeeId: cOpts.employeeId,
+            branchId: cOpts.branchId,
+          }),
+          page: "1",
+          pageSize: "1",
+        }).catch((e) => {
+          console.error("[Gerencia] unanswered answered count", e)
+          return null
+        }),
+      ])
+    return {
+      summary,
+      unansweredAnswered: {
+        count: unansweredAnsweredRes?.pagination.total ?? 0,
+      },
+      hourly,
+      ranking,
+      comparison,
+    }
   } catch (e) {
     console.error("[Gerencia] calls KPIs", e)
     return empty

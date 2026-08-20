@@ -17,6 +17,8 @@ import type {
 
 export interface CallsKpiData {
   summary: CallsSummary
+  /** status=answered + outcome=UNANSWERED (filtro da listagem). */
+  unansweredAnswered: { count: number }
   hourly: CallsHourly
   ranking: CallsAgentsRanking
   comparison: CallsHourlyComparison
