@@ -111,8 +111,8 @@ function FollowUpCardsSkeleton() {
 
 function SalesCardsSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
-      {Array.from({ length: 5 }).map((_, i) => (
+    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @7xl/main:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, i) => (
         <CardSkeleton key={i} />
       ))}
     </div>
@@ -600,9 +600,12 @@ function SalesCards({
     sales.total.count > 0
       ? formatPct((sales.canceled.count / sales.total.count) * 100)
       : "0"
+  const netSalesCount = sales.total.count - sales.canceled.count
+  const netSalesValue =
+    Number(sales.total.value) - Number(sales.canceled.value)
 
   return (
-    <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
+    <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @7xl/main:grid-cols-6">
       <Card className="@container/card bg-sky-50 dark:bg-sky-950/30 border-sky-200/60 dark:border-sky-800/60">
         <CardHeader>
           <CardDescription>Total de Vendas</CardDescription>
@@ -619,6 +622,27 @@ function SalesCards({
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
             Volume total de vendas
+          </div>
+          <div className="text-muted-foreground">Período selecionado</div>
+        </CardFooter>
+      </Card>
+
+      <Card className="@container/card bg-teal-50 dark:bg-teal-950/30 border-teal-200/60 dark:border-teal-800/60">
+        <CardHeader>
+          <CardDescription>Vendas Líquidas</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {formatNumber(netSalesCount)}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              <TrendingUpIcon />
+              {formatCurrency(netSalesValue)}
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            Total menos canceladas
           </div>
           <div className="text-muted-foreground">Período selecionado</div>
         </CardFooter>

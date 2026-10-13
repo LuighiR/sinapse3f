@@ -271,6 +271,12 @@ export function SectionCards() {
     sales && sales.total.count > 0
       ? ((sales.canceled.count / sales.total.count) * 100).toFixed(1)
       : "0"
+  const netSalesCount = sales
+    ? sales.total.count - sales.canceled.count
+    : 0
+  const netSalesValue = sales
+    ? Number(sales.total.value) - Number(sales.canceled.value)
+    : 0
 
   return (
     <>
@@ -747,7 +753,7 @@ export function SectionCards() {
             <ShoppingCartIcon className="size-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Vendas</h2>
           </div>
-          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-3 @7xl/main:grid-cols-6">
             {loading ? (
               skeletons
             ) : sales ? (
@@ -771,6 +777,29 @@ export function SectionCards() {
                   <CardFooter className="flex-col items-start gap-1.5 text-sm">
                     <div className="line-clamp-1 flex gap-2 font-medium">
                       Volume total de vendas
+                    </div>
+                    <div className="text-muted-foreground">
+                      Período selecionado
+                    </div>
+                  </CardFooter>
+                </Card>
+
+                <Card className="@container/card bg-teal-50 dark:bg-teal-950/30 border-teal-200/60 dark:border-teal-800/60">
+                  <CardHeader>
+                    <CardDescription>Vendas Líquidas</CardDescription>
+                    <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+                      {formatNumber(netSalesCount)}
+                    </CardTitle>
+                    <CardAction>
+                      <Badge variant="outline">
+                        <TrendingUpIcon />
+                        {formatCurrency(netSalesValue)}
+                      </Badge>
+                    </CardAction>
+                  </CardHeader>
+                  <CardFooter className="flex-col items-start gap-1.5 text-sm">
+                    <div className="line-clamp-1 flex gap-2 font-medium">
+                      Total menos canceladas
                     </div>
                     <div className="text-muted-foreground">
                       Período selecionado
